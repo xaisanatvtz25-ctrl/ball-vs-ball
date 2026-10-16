@@ -4,772 +4,283 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ball vs Ball</title>
-<meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600&family=Lilita+One&display=swap">
-<style>
-:root{
-  /* Layout: one arcade column — score HUD, square arena, controls, fighter picker, roster */
-  --bg:#0c1730; --panel:#13234a; --panel-2:#1b2f5e; --line:#2b4380;
-  --fg:#ecf1ff; --muted:#9fb0d8; --accent:#ffb423; --accent-ink:#231600;
-  --scrim:rgba(8,14,30,.76);
-  --display:"Lilita One","Arial Rounded MT Bold","Trebuchet MS",sans-serif;
-  --body:"Kanit","Noto Sans Thai","Leelawadee UI",Tahoma,sans-serif;
-  color-scheme:dark;
-}
-[hidden]{display:none!important}
-html,body{background:var(--bg);color:var(--fg)}
-body{font-family:var(--body);font-size:15px;line-height:1.5;-webkit-tap-highlight-color:transparent}
-.app{max-width:560px;margin:0 auto;padding-block:18px 36px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
-header{display:flex;flex-direction:column;gap:4px}
-h1{margin:0;font-family:var(--display);font-weight:400;font-size:clamp(30px,8vw,40px);line-height:1;letter-spacing:.02em;text-wrap:balance}
-h1 .vs{color:var(--accent);font-size:.6em;margin:0 .22em;vertical-align:.2em}
-.sub{margin:0;color:var(--muted);font-size:14px;max-width:60ch}
-
-.hud{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:10px;align-items:center}
-.side{min-width:0;display:flex;flex-direction:column;gap:5px}
-.nm{display:flex;align-items:baseline;gap:6px;min-width:0}
-.side.r .nm{flex-direction:row-reverse}
-.nm .en{font-family:var(--display);font-size:18px;letter-spacing:.03em;line-height:1;color:var(--c)}
-.nm .th{color:var(--muted);font-size:13px;white-space:nowrap}
-.bar{height:12px;border-radius:6px;background:var(--panel-2);overflow:hidden;box-shadow:inset 0 0 0 1px var(--line);display:flex}
-.side.r .bar{justify-content:flex-end}
-.bar i{display:block;height:100%;width:100%;background:var(--c);transition:width .15s ease-out}
-.meta{display:flex;justify-content:space-between;gap:6px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
-.side.r .meta{flex-direction:row-reverse}
-.meta b{color:var(--fg);font-weight:600}
-.skt{overflow:hidden;text-overflow:ellipsis}
-.cd{height:4px;border-radius:2px;background:var(--panel-2);overflow:hidden;display:flex}
-.side.r .cd{justify-content:flex-end}
-.cd i{display:block;height:100%;width:0;background:var(--c);opacity:.85}
-.vsmark{font-family:var(--display);color:var(--accent);font-size:20px}
-
-.stage{position:relative;border-radius:16px;overflow:hidden;box-shadow:0 0 0 1px var(--line),0 18px 40px -18px rgba(0,0,0,.6)}
-canvas{display:block;width:100%;aspect-ratio:1;max-width:100%;touch-action:manipulation;background:#0a1430}
-.overlay{position:absolute;inset:0;display:grid;place-items:center;background:var(--scrim);padding:16px}
-.ov-card{text-align:center;display:flex;flex-direction:column;gap:6px;align-items:center}
-.ov-k{font-size:13px;letter-spacing:.2em;color:var(--muted)}
-.ov-name{font-family:var(--display);font-size:clamp(44px,13vw,68px);line-height:1;color:var(--c,var(--fg))}
-.ov-th{font-size:17px;font-weight:500}
-.ov-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px}
-
-.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.btn{font:600 14px/1 var(--body);color:var(--fg);background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:11px 14px;cursor:pointer}
-.btn:hover{border-color:var(--muted)}
-.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
-.btn:focus-visible,.seg button:focus-visible,.chip:focus-visible,.link:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
-.seg button{font:400 15px/1 var(--display);color:var(--muted);background:var(--panel);border:0;padding:11px 12px;cursor:pointer;letter-spacing:.03em}
-.seg button+button{border-left:1px solid var(--line)}
-.seg button[aria-pressed="true"]{background:var(--panel-2);color:var(--accent)}
-
-.box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:12px}
-.sec-h{display:flex;justify-content:space-between;align-items:center;gap:8px}
-h2{margin:0;font-size:16px;font-weight:600}
-.link{font:500 14px var(--body);color:var(--accent);background:none;border:0;cursor:pointer;padding:4px}
-.pick-row{display:flex;flex-direction:column;gap:6px}
-.lab{font-size:12px;color:var(--muted);letter-spacing:.06em}
-.chips{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
-.chip{display:flex;flex-direction:column;align-items:center;gap:4px;padding:9px 4px;background:var(--bg);border:1.5px solid var(--line);border-radius:10px;color:var(--fg);font:500 13px/1.2 var(--body);cursor:pointer}
-.chip[aria-pressed="true"]{border-color:var(--c);background:var(--panel-2)}
-.orb{display:block;width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.55),rgba(255,255,255,0) 55%),var(--b);box-shadow:inset 0 0 0 2px var(--e)}
-
-.roster{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.card{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:6px;min-width:0}
-.card .top{display:flex;align-items:center;gap:8px}
-.card .orb{width:30px;height:30px;flex:none}
-.card .en{font-family:var(--display);font-size:17px;line-height:1;letter-spacing:.03em}
-.card .th{font-size:12px;color:var(--muted)}
-.card .sk{font-weight:600;font-size:14px;color:var(--c)}
-.card p{margin:0;font-size:13px;color:var(--muted);line-height:1.45}
-.stats{display:flex;flex-wrap:wrap;gap:4px;margin-top:auto}
-.pill{font-size:11px;padding:2px 7px;border-radius:999px;background:var(--panel-2);color:var(--fg);font-variant-numeric:tabular-nums}
-@media (max-width:360px){.roster{grid-template-columns:1fr}}
-</style>
-<style>body{margin:0}</style>
+<meta name="description" content="เกมลูกบอลสกิลสู้กันในกรง 9 นักสู้ เด้งตามฟิสิกส์ เล่นออนไลน์กับเพื่อนด้วยรหัสห้อง">
+<meta name="theme-color" content="#0b1530">
+<meta name="color-scheme" content="dark">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Ball vs Ball">
+<meta property="og:description" content="ลูกบอลสกิลสู้กันในกรง 9 นักสู้ เล่นออนไลน์กับเพื่อนได้">
+<meta property="og:image" content="https://xaisanatvtz25-ctrl.github.io/ball-vs-ball/img/cover.jpg">
+<meta property="og:url" content="https://xaisanatvtz25-ctrl.github.io/ball-vs-ball/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="fonts/lilita-400.woff" as="font" type="font/woff" crossorigin>
+<link rel="preload" href="fonts/kanit-500.woff" as="font" type="font/woff" crossorigin>
+<link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-<div class="app">
-  <header>
-    <h1>BALL<span class="vs">VS</span>BALL</h1>
-    <p class="sub">ลูกบอลบังคับไม่ได้ เด้งตามฟิสิกส์ในกรง ใช้สกิลเองตามคูลดาวน์ ใคร HP หมดก่อนแพ้</p>
-  </header>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z" fill="currentColor"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.8 3.9 5.8 3.9 9s-1.3 6.2-3.9 9c-2.6-2.8-3.9-5.8-3.9-9S9.4 5.8 12 3z"/></g></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><g fill="currentColor"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/></g></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M10.3 3h3.4l.5 2.4 1.8 1 2.3-.8 1.7 2.9-1.8 1.6v2l1.8 1.6-1.7 2.9-2.3-.8-1.8 1-.5 2.4h-3.4l-.5-2.4-1.8-1-2.3.8-1.7-2.9 1.8-1.6v-2L4 9.5l1.7-2.9 2.3.8 1.8-1z"/><circle cx="12" cy="12" r="3"/></g></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-dice" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="4"/></g><g fill="currentColor"><circle cx="9" cy="9" r="1.6"/><circle cx="15" cy="15" r="1.6"/><circle cx="15" cy="9" r="1.6"/><circle cx="9" cy="15" r="1.6"/></g></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><g fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></g></symbol>
+  <symbol id="i-sound" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></g></symbol>
+  <symbol id="i-mute" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></g></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10.5l5 5 5-5M5 19.5h14"/></g></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5"/></g></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="17.5" cy="5.5" r="2.5"/><circle cx="6.5" cy="12" r="2.5"/><circle cx="17.5" cy="18.5" r="2.5"/><path d="M8.7 10.7l6.6-3.9M8.7 13.3l6.6 3.9"/></g></symbol>
+  <symbol id="i-crown" viewBox="0 0 24 24"><path d="M3.5 8l4.5 3.5L12 5l4 6.5L20.5 8l-2 10h-13z" fill="currentColor"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><g fill="currentColor"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 19c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5z"/><circle cx="17" cy="9" r="2.8" opacity=".75"/><path d="M15.8 13.6c2.9-.2 5.2 1.5 5.7 4.9h-4.4c-.2-1.9-.6-3.5-1.3-4.9z" opacity=".75"/></g></symbol>
+</svg>
 
-  <section class="hud">
-    <div class="side l" id="hudL">
-      <div class="nm"><span class="en">ARCHER</span><span class="th">ธนู</span></div>
-      <div class="bar"><i></i></div>
-      <div class="meta"><span>HP <b class="hpn">100</b></span><span class="skt">ยิงธนู</span></div>
-      <div class="cd"><i></i></div>
-    </div>
-    <div class="vsmark">VS</div>
-    <div class="side r" id="hudR">
-      <div class="nm"><span class="en">BOMBER</span><span class="th">ระเบิด</span></div>
-      <div class="bar"><i></i></div>
-      <div class="meta"><span>HP <b class="hpn">100</b></span><span class="skt">โยนระเบิด</span></div>
-      <div class="cd"><i></i></div>
+<div id="app">
+
+  <!-- HOME / COVER -->
+  <section class="screen home" data-screen="home">
+    <canvas class="showcase" id="showcase" aria-hidden="true"></canvas>
+    <div class="home-inner">
+      <div class="logo" role="img" aria-label="Ball vs Ball">
+        <span class="logo-word">BALL</span>
+        <span class="logo-vs">VS</span>
+        <span class="logo-word">BALL</span>
+      </div>
+      <p class="tagline">ลูกบอลสกิลสู้กันในกรง · 9 นักสู้</p>
+      <nav class="home-menu" aria-label="เมนูหลัก">
+        <button class="bigbtn gold" id="btn-play" type="button">
+          <svg class="ico"><use href="#i-play"/></svg>
+          <span class="bb-text"><b>เล่นเลย</b><small>เลือก 2 ลูก แล้วดูมันสู้กัน</small></span>
+        </button>
+        <button class="bigbtn blue" id="btn-online" type="button">
+          <svg class="ico"><use href="#i-users"/></svg>
+          <span class="bb-text"><b>เล่นออนไลน์</b><small>สร้างห้อง ชวนเพื่อนด้วยรหัส</small></span>
+        </button>
+        <div class="home-row">
+          <button class="midbtn" id="btn-roster" type="button"><svg class="ico"><use href="#i-grid"/></svg>ตัวละคร</button>
+          <button class="midbtn" id="btn-settings" type="button"><svg class="ico"><use href="#i-gear"/></svg>ตั้งค่า</button>
+        </div>
+      </nav>
+      <div class="home-foot">
+        <button class="pill install-btn" type="button" data-install><svg class="ico"><use href="#i-download"/></svg>ติดตั้งแอป</button>
+        <span class="ver">v2.0</span>
+      </div>
     </div>
   </section>
 
-  <div class="stage">
-    <canvas id="cv" aria-label="สนามต่อสู้ลูกบอล"></canvas>
-    <div class="overlay" id="ov" hidden>
+  <!-- CHARACTER SELECT -->
+  <section class="screen" data-screen="select" hidden>
+    <header class="topbar">
+      <button class="iconbtn" type="button" data-back aria-label="ย้อนกลับ"><svg><use href="#i-back"/></svg></button>
+      <h1>เลือกนักสู้</h1>
+      <button class="iconbtn" type="button" id="sel-random" aria-label="สุ่มนักสู้"><svg><use href="#i-dice"/></svg></button>
+    </header>
+    <div class="scroll">
+      <div class="vs-slots">
+        <button class="slot p1" type="button" id="slot-left" data-side="left">
+          <span class="slot-tag">ฝั่งซ้าย</span>
+          <span class="slot-orb"><img alt="" hidden><i>?</i></span>
+          <span class="slot-name">ยังไม่เลือก</span>
+        </button>
+        <span class="vs-badge">VS</span>
+        <button class="slot p2" type="button" id="slot-right" data-side="right">
+          <span class="slot-tag">ฝั่งขวา</span>
+          <span class="slot-orb"><img alt="" hidden><i>?</i></span>
+          <span class="slot-name">ยังไม่เลือก</span>
+        </button>
+      </div>
+      <p class="hint" id="sel-hint">แตะลูกบอลเพื่อเลือกฝั่งซ้าย</p>
+      <div class="tiles" id="sel-tiles"></div>
+      <article class="info" id="sel-info"></article>
+    </div>
+    <footer class="bottombar">
+      <button class="bigbtn gold wide" id="sel-start" type="button" disabled>
+        <svg class="ico"><use href="#i-play"/></svg><span class="bb-text"><b id="sel-start-label">เลือกให้ครบ 2 ลูก</b></span>
+      </button>
+    </footer>
+  </section>
+
+  <!-- BATTLE -->
+  <section class="screen battle" data-screen="battle" hidden>
+    <header class="topbar slim">
+      <button class="iconbtn" type="button" id="b-pause" aria-label="หยุดเกม"><svg><use href="#i-pause"/></svg></button>
+      <div class="clock" id="b-clock">0:00</div>
+      <button class="iconbtn" type="button" id="b-sound" aria-label="เปิดปิดเสียง"><svg><use href="#i-sound"/></svg></button>
+    </header>
+    <section class="hud">
+      <div class="side l" id="hudL">
+        <div class="nm"><img alt=""><span class="en"></span><span class="who"></span></div>
+        <div class="bar"><i></i></div>
+        <div class="meta"><span>HP <b class="hpn">100</b></span><span class="skt"></span></div>
+        <div class="cd"><i></i></div>
+        <div class="chips"></div>
+      </div>
+      <div class="vsmark">VS</div>
+      <div class="side r" id="hudR">
+        <div class="nm"><img alt=""><span class="en"></span><span class="who"></span></div>
+        <div class="bar"><i></i></div>
+        <div class="meta"><span>HP <b class="hpn">100</b></span><span class="skt"></span></div>
+        <div class="cd"><i></i></div>
+        <div class="chips"></div>
+      </div>
+    </section>
+    <div class="stage-wrap">
+      <div class="stage">
+        <canvas id="arena" aria-label="สนามต่อสู้"></canvas>
+        <div class="countdown" id="countdown" hidden></div>
+      </div>
+    </div>
+    <footer class="battle-foot">
+      <div class="seg" role="group" aria-label="ความเร็ว" id="b-speed">
+        <button type="button" data-sp="1" aria-pressed="true">1x</button>
+        <button type="button" data-sp="2" aria-pressed="false">2x</button>
+        <button type="button" data-sp="3" aria-pressed="false">3x</button>
+      </div>
+      <div class="online-tag" id="b-online" hidden></div>
+    </footer>
+    <div class="overlay" id="pause-ov" hidden>
       <div class="ov-card">
-        <div class="ov-k">ผู้ชนะ</div>
-        <div class="ov-name" id="ovName">ARCHER</div>
-        <div class="ov-th" id="ovTh">ธนู</div>
-        <div class="ov-btns">
-          <button class="btn primary" id="again" type="button">สู้อีกรอบ</button>
-          <button class="btn" id="againRandom" type="button">สุ่มคู่ใหม่</button>
+        <h2>หยุดเกม</h2>
+        <button class="bigbtn gold wide" type="button" id="p-resume"><span class="bb-text"><b>เล่นต่อ</b></span></button>
+        <button class="midbtn wide" type="button" id="p-restart">เริ่มรอบใหม่</button>
+        <button class="midbtn wide" type="button" id="p-change">เปลี่ยนตัวละคร</button>
+        <button class="midbtn wide" type="button" id="p-home">เมนูหลัก</button>
+      </div>
+    </div>
+    <div class="overlay" id="result-ov" hidden>
+      <div class="ov-card result">
+        <div class="ov-k" id="r-kicker">ผู้ชนะ</div>
+        <img class="r-orb" id="r-orb" alt="">
+        <div class="r-name" id="r-name">ARCHER</div>
+        <div class="r-sub" id="r-sub"></div>
+        <div class="r-btns" id="r-local">
+          <button class="bigbtn gold wide" type="button" id="r-again"><span class="bb-text"><b>อีกรอบ</b></span></button>
+          <div class="home-row">
+            <button class="midbtn" type="button" id="r-change">เปลี่ยนตัว</button>
+            <button class="midbtn" type="button" id="r-home">เมนูหลัก</button>
+          </div>
+        </div>
+        <div class="r-btns" id="r-online" hidden>
+          <button class="bigbtn gold wide" type="button" id="r-lobby"><span class="bb-text"><b>กลับห้อง เล่นอีกรอบ</b></span></button>
+          <button class="midbtn wide" type="button" id="r-leave">ออกจากห้อง</button>
         </div>
       </div>
     </div>
-  </div>
+  </section>
 
-  <div class="controls">
-    <button class="btn primary" id="restart" type="button">เริ่มรอบใหม่</button>
-    <button class="btn" id="pause" type="button">หยุด</button>
-    <div class="seg" role="group" aria-label="ความเร็ว">
-      <button type="button" id="sp1" data-sp="1" aria-pressed="true">1x</button>
-      <button type="button" id="sp2" data-sp="2" aria-pressed="false">2x</button>
-      <button type="button" id="sp3" data-sp="3" aria-pressed="false">3x</button>
+  <!-- ROSTER -->
+  <section class="screen" data-screen="roster" hidden>
+    <header class="topbar">
+      <button class="iconbtn" type="button" data-back aria-label="ย้อนกลับ"><svg><use href="#i-back"/></svg></button>
+      <h1>ตัวละครทั้ง 9</h1>
+      <span class="iconbtn ghost" aria-hidden="true"></span>
+    </header>
+    <div class="scroll"><div class="roster" id="roster"></div></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="screen" data-screen="settings" hidden>
+    <header class="topbar">
+      <button class="iconbtn" type="button" data-back aria-label="ย้อนกลับ"><svg><use href="#i-back"/></svg></button>
+      <h1>ตั้งค่า</h1>
+      <span class="iconbtn ghost" aria-hidden="true"></span>
+    </header>
+    <div class="scroll">
+      <div class="group">
+        <h2 class="group-h">เสียง</h2>
+        <label class="row"><span>เสียงเอฟเฟกต์</span><input type="checkbox" class="switch" id="set-sfx"></label>
+        <label class="row"><span>เพลง</span><input type="checkbox" class="switch" id="set-music"></label>
+      </div>
+      <div class="group">
+        <h2 class="group-h">เกม</h2>
+        <label class="row"><span>แรงโน้มถ่วง<small>ปิดแล้วลูกบอลลอยไปมาแบบอวกาศ</small></span><input type="checkbox" class="switch" id="set-grav"></label>
+        <div class="row"><span>ความเร็วเริ่มต้น</span>
+          <div class="seg small" role="group" aria-label="ความเร็วเริ่มต้น" id="set-speed">
+            <button type="button" data-sp="1">1x</button><button type="button" data-sp="2">2x</button><button type="button" data-sp="3">3x</button>
+          </div>
+        </div>
+      </div>
+      <div class="group">
+        <h2 class="group-h">แอป</h2>
+        <div class="row"><span>ติดตั้งลงมือถือ<small>เปิดเล่นจากหน้าจอหลักได้เหมือนแอป</small></span><button class="pill install-btn" type="button" data-install><svg class="ico"><use href="#i-download"/></svg>ติดตั้ง</button></div>
+        <div class="row"><span>สถิติชนะ<small>นับจำนวนครั้งที่แต่ละลูกชนะ</small></span><button class="pill danger" type="button" id="set-reset">ล้างสถิติ</button></div>
+      </div>
+      <p class="fine">Ball vs Ball v2.0 · ฟอนต์ Kanit และ Lilita One (SIL Open Font License)</p>
     </div>
-    <button class="btn" id="grav" type="button" aria-pressed="true">แรงโน้มถ่วง: เปิด</button>
-  </div>
-
-  <section class="box">
-    <div class="sec-h"><h2>เลือกนักสู้</h2><button class="link" id="randomize" type="button">สุ่มคู่</button></div>
-    <div class="pick-row"><span class="lab">ฝั่งซ้าย</span><div class="chips" id="chipsL"></div></div>
-    <div class="pick-row"><span class="lab">ฝั่งขวา</span><div class="chips" id="chipsR"></div></div>
   </section>
 
-  <section class="box">
-    <div class="sec-h"><h2>นักสู้ทั้ง 4</h2></div>
-    <div class="roster" id="roster"></div>
+  <!-- ONLINE: NAME + CREATE / JOIN -->
+  <section class="screen" data-screen="online" hidden>
+    <header class="topbar">
+      <button class="iconbtn" type="button" data-back aria-label="ย้อนกลับ"><svg><use href="#i-back"/></svg></button>
+      <h1>เล่นออนไลน์</h1>
+      <span class="iconbtn ghost" aria-hidden="true"></span>
+    </header>
+    <div class="scroll">
+      <div class="card">
+        <label class="lab" for="on-name">ชื่อของคุณ</label>
+        <input class="field" id="on-name" maxlength="12" autocomplete="nickname" placeholder="เช่น ไซซะนะ">
+      </div>
+      <div class="card">
+        <h2 class="card-h">สร้างห้องใหม่</h2>
+        <p class="card-p">ได้รหัสห้อง 5 ตัว แล้วส่งรหัสให้เพื่อน</p>
+        <button class="bigbtn gold wide" type="button" id="on-create"><svg class="ico"><use href="#i-crown"/></svg><span class="bb-text"><b>สร้างห้อง</b></span></button>
+      </div>
+      <div class="or"><span>หรือ</span></div>
+      <div class="card">
+        <h2 class="card-h">เข้าห้องเพื่อน</h2>
+        <label class="lab" for="on-code">รหัสห้อง</label>
+        <input class="field code" id="on-code" inputmode="numeric" pattern="[0-9]*" maxlength="5" autocomplete="off" placeholder="00000">
+        <button class="bigbtn blue wide" type="button" id="on-join"><svg class="ico"><use href="#i-users"/></svg><span class="bb-text"><b>เข้าห้อง</b></span></button>
+      </div>
+      <p class="status-line" id="on-status" role="status"></p>
+      <p class="fine">ระบบออนไลน์ใช้เซิร์ฟเวอร์สาธารณะฟรี ใครรู้รหัสห้องก็เห็นชื่อในห้องได้ อย่าใส่ข้อมูลส่วนตัวในชื่อ</p>
+    </div>
   </section>
+
+  <!-- ONLINE LOBBY -->
+  <section class="screen" data-screen="lobby" hidden>
+    <header class="topbar">
+      <button class="iconbtn" type="button" data-back aria-label="ออกจากห้อง"><svg><use href="#i-back"/></svg></button>
+      <h1>ห้องเล่น</h1>
+      <span class="conn" id="lb-conn" title="สถานะการเชื่อมต่อ"></span>
+    </header>
+    <div class="scroll">
+      <div class="card code-card">
+        <div class="lab">รหัสห้อง ส่งให้เพื่อน</div>
+        <div class="room-code" id="lb-code">00000</div>
+        <div class="code-actions">
+          <button class="pill" type="button" id="lb-copy"><svg class="ico"><use href="#i-copy"/></svg>คัดลอก</button>
+          <button class="pill" type="button" id="lb-share"><svg class="ico"><use href="#i-share"/></svg>แชร์</button>
+        </div>
+      </div>
+      <div class="players" id="lb-players"></div>
+      <div class="score" id="lb-score"></div>
+      <h2 class="sec-h">เลือกบอลของคุณ</h2>
+      <div class="tiles compact" id="lb-tiles"></div>
+    </div>
+    <footer class="bottombar">
+      <p class="lb-msg" id="lb-msg"></p>
+      <button class="bigbtn gold wide" type="button" id="lb-ready" disabled><span class="bb-text"><b id="lb-ready-label">เลือกบอลก่อน</b></span></button>
+    </footer>
+  </section>
+
 </div>
 
-<script>
-(() => {
-"use strict";
-const L = 600, PAD = 12, LO = PAD, HI = L - PAD, G = 760, BL = 44, R = 36;
-const FIGHTERS = {
-  archer: { en:"ARCHER", th:"ธนู",    body:"#3fc6ff", edge:"#0a5d8a", ink:"#5fd0ff", mass:1.0,  cd:1.6, skill:"ยิงธนู",     dmg:"7",
-            desc:"ยิงลูกธนูพุ่งตรงเข้าหาศัตรู โดนแล้วกระเด็นนิดหน่อย" },
-  bomb:   { en:"BOMBER", th:"ระเบิด",  body:"#4b5672", edge:"#141a28", ink:"#ff9a3c", mass:1.25, cd:3.2, skill:"โยนระเบิด",  dmg:"15",
-            desc:"โยนระเบิดโค้งตามแรงโน้มถ่วง ระเบิดวงกว้าง ดีดศัตรูกระเด็นไกล" },
-  blade:  { en:"BLADE",  th:"ใบมีด",   body:"#ff5470", edge:"#8c1a33", ink:"#ff7a90", mass:1.1,  cd:4.5, skill:"ใบมีดหมุน", dmg:"5 / ครั้ง",
-            desc:"ใบมีด 3 ใบหมุนรอบตัว 3 วินาที ฟันซ้ำได้ และปัดลูกธนูทิ้ง" },
-  volt:   { en:"VOLT",   th:"สายฟ้า",  body:"#ffd43b", edge:"#8a6400", ink:"#ffd43b", mass:0.9,  cd:2.6, skill:"พุ่งสายฟ้า", dmg:"12",
-            desc:"พุ่งชนศัตรูด้วยความเร็วสูง ชนโดนแล้วดีดกระเด็นแรง" }
-};
-const ORDER = ["archer", "bomb", "blade", "volt"];
+<div class="modal" id="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-h">
+    <h2 id="modal-h"></h2>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-btns" id="modal-btns"></div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
 
-const $ = s => document.querySelector(s);
-const rand = (a, b) => a + Math.random() * (b - a);
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const hyp = Math.hypot;
-const TAU = Math.PI * 2;
-const reduceMotion = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
-
-const cv = $("#cv"), ctx = cv.getContext("2d"), ov = $("#ov");
-let pick = { L: "archer", R: "bomb" }, speed = 1, paused = false, gravityOn = true, S = null;
-let wins = {};
-try { wins = JSON.parse(localStorage.getItem("bvb-wins") || "{}") || {}; } catch (e) { wins = {}; }
-function saveWins() { try { localStorage.setItem("bvb-wins", JSON.stringify(wins)); } catch (e) {} }
-
-function resize() {
-  const w = cv.clientWidth || 400;
-  const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
-  const px = Math.max(1, Math.round(w * dpr));
-  if (cv.width !== px) { cv.width = px; cv.height = px; }
-}
-if (window.ResizeObserver) new ResizeObserver(resize).observe(cv);
-window.addEventListener("resize", resize);
-resize();
-
-/* ---------------- match setup ---------------- */
-function makeBall(type, side) {
-  const f = FIGHTERS[type];
-  const a = side === 0 ? rand(-0.7, 0.3) : Math.PI + rand(-0.3, 0.7);
-  const sp = rand(380, 460);
-  return {
-    type, f, side,
-    x: side === 0 ? rand(110, 190) : rand(410, 490),
-    y: rand(130, 260),
-    vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-    r: R, m: f.mass, hp: 100, max: 100,
-    cd: f.cd * rand(0.45, 0.8),
-    dash: 0, dashHit: false, spin: 0, spinA: rand(0, TAU),
-    bladeCD: 0, flash: 0, alive: true, trail: []
-  };
-}
-
-function newMatch() {
-  S = { balls: [makeBall(pick.L, 0), makeBall(pick.R, 1)], arrows: [], bombs: [], parts: [], rings: [], texts: [], bolts: [],
-        shake: 0, over: false, overT: 0, winner: null, t: 0 };
-  ov.hidden = true;
-  paused = false; syncPause();
-  setupHud();
-}
-const foeOf = b => (S.balls[0] === b ? S.balls[1] : S.balls[0]);
-
-/* ---------------- physics ---------------- */
-function limitSpeed(b, max) {
-  const s = hyp(b.vx, b.vy);
-  if (s > max) { b.vx *= max / s; b.vy *= max / s; }
-}
-
-function wallBounce(b) {
-  let hit = false, floor = false;
-  if (b.x - b.r < LO) { b.x = LO + b.r; b.vx = Math.abs(b.vx); hit = true; }
-  else if (b.x + b.r > HI) { b.x = HI - b.r; b.vx = -Math.abs(b.vx); hit = true; }
-  if (b.y - b.r < LO) { b.y = LO + b.r; b.vy = Math.abs(b.vy); hit = true; }
-  else if (b.y + b.r > HI) { b.y = HI - b.r; b.vy = -Math.abs(b.vy); hit = true; floor = true; }
-  if (b.dash > 0) return;
-  if (gravityOn && floor) {
-    const minVy = Math.sqrt(2 * G * 260);          // keep every bounce lively
-    if (-b.vy < minVy) b.vy = -minVy;
-    if (Math.abs(b.vx) < 120) b.vx = (b.vx === 0 ? (Math.random() < .5 ? -1 : 1) : Math.sign(b.vx)) * 120;
-  }
-  if (!gravityOn && hit) {
-    const s = hyp(b.vx, b.vy);
-    if (s < 340) { if (s < 1) { b.vx = 340; b.vy = 0; } else { b.vx *= 340 / s; b.vy *= 340 / s; } }
-  }
-  limitSpeed(b, 1000);
-}
-
-function collideBalls(a, b) {
-  const dx = b.x - a.x, dy = b.y - a.y;
-  const d = hyp(dx, dy) || 0.0001;
-  const overlap = a.r + b.r - d;
-  if (overlap <= 0) return;
-  const nx = dx / d, ny = dy / d;
-  const ia = 1 / a.m, ib = 1 / b.m, tot = ia + ib;
-  a.x -= nx * overlap * (ia / tot); a.y -= ny * overlap * (ia / tot);
-  b.x += nx * overlap * (ib / tot); b.y += ny * overlap * (ib / tot);
-  const vn = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
-  if (vn < 0) {
-    const j = -2 * vn / tot;                         // perfectly elastic
-    a.vx -= j * ia * nx; a.vy -= j * ia * ny;
-    b.vx += j * ib * nx; b.vy += j * ib * ny;
-    burst(a.x + nx * a.r, a.y + ny * a.r, "#ffffff", 5, 160, 2.2);
-  }
-  const pairs = [[a, b, 1], [b, a, -1]];
-  for (const [p, q, s] of pairs) {
-    if (p.dash > 0 && !p.dashHit && p.alive) {
-      p.dashHit = true; p.dash = 0;
-      q.vx += nx * s * 420; q.vy += ny * s * 420;
-      limitSpeed(p, 720);
-      ring(a.x + nx * a.r, a.y + ny * a.r, 8, 70, 0.35, p.f.ink, 5);
-      S.shake = Math.max(S.shake, 7);
-      hurt(q, 12, p);
-    }
-  }
-}
-
-function segDist(px, py, x1, y1, x2, y2) {
-  const vx = x2 - x1, vy = y2 - y1;
-  const t = clamp(((px - x1) * vx + (py - y1) * vy) / (vx * vx + vy * vy), 0, 1);
-  return hyp(px - (x1 + vx * t), py - (y1 + vy * t));
-}
-
-function bladeHits(o, f) {
-  if (!o.alive || !f.alive || o.spin <= 0 || f.bladeCD > 0) return;
-  for (let k = 0; k < 3; k++) {
-    const a = o.spinA + k * TAU / 3, ux = Math.cos(a), uy = Math.sin(a);
-    const x1 = o.x + ux * (o.r + 2), y1 = o.y + uy * (o.r + 2);
-    const x2 = o.x + ux * (o.r + BL), y2 = o.y + uy * (o.r + BL);
-    if (segDist(f.x, f.y, x1, y1, x2, y2) < f.r + 3) {
-      f.bladeCD = 0.3;
-      const dx = f.x - o.x, dy = f.y - o.y, d = hyp(dx, dy) || 1;
-      f.vx += dx / d * 260; f.vy += dy / d * 260;
-      burst(x2, y2, "#f4f6ff", 8, 260, 2.5);
-      hurt(f, 5, o);
-      return;
-    }
-  }
-}
-
-/* ---------------- skills ---------------- */
-function useSkill(b, f) {
-  if (b.type === "archer") fireArrow(b, f);
-  else if (b.type === "bomb") throwBomb(b, f);
-  else if (b.type === "blade") { b.spin = 3.0; ring(b.x, b.y, b.r, b.r + BL, 0.35, b.f.ink, 4); }
-  else if (b.type === "volt") dash(b, f);
-}
-
-function fireArrow(b, f) {
-  let dx = f.x + f.vx * 0.12 - b.x, dy = f.y + f.vy * 0.12 - b.y;
-  const d = hyp(dx, dy) || 1; dx /= d; dy /= d;
-  const x = b.x + dx * (b.r + 6), y = b.y + dy * (b.r + 6);
-  S.arrows.push({ x, y, sx: x, sy: y, vx: dx * 980, vy: dy * 980, owner: b, life: 1.4 });
-  b.vx -= dx * 60; b.vy -= dy * 60;
-  burst(x, y, "#bff0ff", 5, 140, 2);
-}
-
-function throwBomb(b, f) {
-  // lead the target: aim where the foe will roughly be when the bomb lands
-  const tx = clamp(f.x + f.vx * 0.6, LO + 30, HI - 30), ty = clamp(f.y + f.vy * 0.3, LO + 30, HI - 30);
-  const dx = tx - b.x, dy = ty - b.y;
-  let vx, vy;
-  if (gravityOn) { const t = 0.75; vx = dx / t; vy = dy / t - 0.5 * G * t; }
-  else { const d = hyp(dx, dy) || 1; vx = dx / d * 520; vy = dy / d * 520; }
-  vx = clamp(vx, -750, 750); vy = clamp(vy, -900, 600);
-  const s = hyp(vx, vy) || 1;
-  S.bombs.push({ x: b.x + vx / s * (b.r + 14), y: b.y + vy / s * (b.r + 14), vx, vy, r: 12, fuse: 1.15, owner: b });
-}
-
-function dash(b, f) {
-  let dx = f.x - b.x, dy = f.y - b.y;
-  const d = hyp(dx, dy) || 1; dx /= d; dy /= d;
-  b.vx = dx * 1150; b.vy = dy * 1150; b.dash = 0.5; b.dashHit = false;
-  S.bolts.push(makeBolt(b.x, b.y, b.x + dx * 130, b.y + dy * 130, "#fff1a8"));
-  ring(b.x, b.y, b.r, b.r + 26, 0.25, b.f.ink, 3);
-}
-
-function updateArrows(dt) {
-  for (const ar of S.arrows) {
-    ar.x += ar.vx * dt; ar.y += ar.vy * dt; ar.life -= dt;
-    if (ar.x < LO || ar.x > HI || ar.y < LO || ar.y > HI) {
-      ar.dead = true; burst(clamp(ar.x, LO, HI), clamp(ar.y, LO, HI), "#9fe6ff", 6, 180, 2); continue;
-    }
-    const f = foeOf(ar.owner);
-    if (!f.alive) continue;
-    const d = hyp(ar.x - f.x, ar.y - f.y);
-    if (f.spin > 0 && d < f.r + BL) {
-      ar.dead = true; burst(ar.x, ar.y, "#ffffff", 8, 220, 2.2);
-      S.texts.push({ x: f.x, y: f.y - f.r - 26, txt: "ปัด!", life: 0.8, color: "#ffffff", thai: true });
-      continue;
-    }
-    if (d < f.r) {
-      ar.dead = true;
-      const s = hyp(ar.vx, ar.vy);
-      f.vx += ar.vx / s * 160; f.vy += ar.vy / s * 160;
-      hurt(f, 7, ar.owner);
-    }
-  }
-  S.arrows = S.arrows.filter(a => !a.dead && a.life > 0);
-}
-
-function updateBombs(dt) {
-  for (const bm of S.bombs) {
-    if (gravityOn) bm.vy += G * dt; else { bm.vx *= 0.996; bm.vy *= 0.996; }
-    bm.x += bm.vx * dt; bm.y += bm.vy * dt;
-    if (bm.x - bm.r < LO) { bm.x = LO + bm.r; bm.vx = Math.abs(bm.vx) * 0.7; }
-    else if (bm.x + bm.r > HI) { bm.x = HI - bm.r; bm.vx = -Math.abs(bm.vx) * 0.7; }
-    if (bm.y - bm.r < LO) { bm.y = LO + bm.r; bm.vy = Math.abs(bm.vy) * 0.7; }
-    else if (bm.y + bm.r > HI) { bm.y = HI - bm.r; bm.vy = -Math.abs(bm.vy) * 0.7; bm.vx *= 0.9; }
-    bm.fuse -= dt;
-    const f = foeOf(bm.owner);
-    if ((f.alive && hyp(bm.x - f.x, bm.y - f.y) < f.r + bm.r) || bm.fuse <= 0) explode(bm);
-  }
-  S.bombs = S.bombs.filter(b => !b.dead);
-}
-
-function explode(bm) {
-  bm.dead = true;
-  const RAD = 118;
-  ring(bm.x, bm.y, 10, RAD, 0.45, "#ffb347", 6);
-  S.rings.push({ x: bm.x, y: bm.y, r0: RAD * 0.4, r1: RAD, life: 0.25, max: 0.25, color: "#ffd38a", fill: true });
-  burst(bm.x, bm.y, "#ff9a3c", 16, 420, 4);
-  burst(bm.x, bm.y, "#ffe08a", 10, 300, 3);
-  burst(bm.x, bm.y, "#5b6274", 8, 200, 5);
-  S.shake = Math.max(S.shake, 12);
-  const f = foeOf(bm.owner);
-  if (!f.alive) return;
-  const dx = f.x - bm.x, dy = f.y - bm.y, d = hyp(dx, dy) || 1;
-  if (d < RAD + f.r) {
-    f.vx += dx / d * 560; f.vy += dy / d * 560;
-    hurt(f, 15, bm.owner);
-  }
-}
-
-function hurt(b, dmg, src) {
-  if (!b.alive || S.over) return;
-  b.hp = Math.max(0, b.hp - dmg); b.flash = 0.12;
-  S.texts.push({ x: b.x + rand(-10, 10), y: b.y - b.r - 6, txt: "-" + dmg, life: 0.9, color: src.f.ink });
-  burst(b.x, b.y, b.f.body, 10, 240, 3);
-  if (b.hp <= 0) {
-    b.alive = false;
-    burst(b.x, b.y, b.f.body, 40, 560, 4.5);
-    burst(b.x, b.y, "#ffffff", 14, 380, 2.5);
-    ring(b.x, b.y, b.r, b.r * 3.2, 0.6, b.f.ink, 6);
-    S.shake = Math.max(S.shake, 14);
-    S.over = true; S.overT = 1.1; S.winner = src;
-    wins[src.type] = (wins[src.type] || 0) + 1; saveWins();
-    const pill = document.getElementById("w-" + src.type);
-    if (pill) pill.textContent = "ชนะ " + wins[src.type];
-  }
-}
-
-/* ---------------- effects ---------------- */
-function burst(x, y, color, n, spd, size) {
-  for (let i = 0; i < n; i++) {
-    const a = rand(0, TAU), s = rand(spd * 0.3, spd);
-    const life = rand(0.25, 0.6);
-    S.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life, max: life, color, size: rand(size * 0.6, size * 1.3) });
-  }
-}
-function ring(x, y, r0, r1, life, color, width) { S.rings.push({ x, y, r0, r1, life, max: life, color, width }); }
-function makeBolt(x1, y1, x2, y2, color) {
-  const pts = [], n = 7, dx = x2 - x1, dy = y2 - y1, d = hyp(dx, dy) || 1, px = -dy / d, py = dx / d;
-  for (let i = 0; i <= n; i++) {
-    const t = i / n, off = (i === 0 || i === n) ? 0 : rand(-12, 12);
-    pts.push([x1 + dx * t + px * off, y1 + dy * t + py * off]);
-  }
-  return { pts, life: 0.22, max: 0.22, color };
-}
-function updateFx(dt) {
-  for (const p of S.parts) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.96; p.vy *= 0.96; p.life -= dt; }
-  S.parts = S.parts.filter(p => p.life > 0);
-  for (const r of S.rings) r.life -= dt;
-  S.rings = S.rings.filter(r => r.life > 0);
-  for (const t of S.texts) { t.y -= 42 * dt; t.life -= dt; }
-  S.texts = S.texts.filter(t => t.life > 0);
-  for (const b of S.bolts) b.life -= dt;
-  S.bolts = S.bolts.filter(b => b.life > 0);
-}
-
-/* ---------------- step ---------------- */
-function step(dt) {
-  S.t += dt;
-  const [A, B] = S.balls;
-  for (const b of S.balls) {
-    if (!b.alive) continue;
-    const f = foeOf(b);
-    if (b.dash > 0) {
-      b.dash -= dt;
-      b.trail.push({ x: b.x, y: b.y, life: 0.22 });
-      if (b.dash <= 0) limitSpeed(b, 720);
-    } else if (gravityOn) b.vy += G * dt;
-    b.x += b.vx * dt; b.y += b.vy * dt;
-    wallBounce(b);
-    if (!S.over) {
-      b.cd -= dt;
-      if (b.cd <= 0 && f.alive) { useSkill(b, f); b.cd = b.f.cd; }
-    }
-    if (b.spin > 0) b.spin = Math.max(0, b.spin - dt);
-    b.spinA += dt * (b.spin > 0 ? 11 : 1.5);
-    b.bladeCD = Math.max(0, b.bladeCD - dt);
-    b.flash = Math.max(0, b.flash - dt);
-  }
-  for (const b of S.balls) {
-    for (const p of b.trail) p.life -= dt;
-    b.trail = b.trail.filter(p => p.life > 0);
-  }
-  if (A.alive && B.alive) collideBalls(A, B);
-  bladeHits(A, B); bladeHits(B, A);
-  updateArrows(dt);
-  updateBombs(dt);
-  updateFx(dt);
-}
-
-/* ---------------- drawing ---------------- */
-let floorGrad = null;
-function drawArena() {
-  ctx.fillStyle = "#0a1430"; ctx.fillRect(-30, -30, L + 60, L + 60);
-  if (!floorGrad) {
-    floorGrad = ctx.createLinearGradient(0, LO, 0, HI);
-    floorGrad.addColorStop(0, "#1e3463"); floorGrad.addColorStop(1, "#142750");
-  }
-  ctx.fillStyle = floorGrad; ctx.fillRect(LO, LO, HI - LO, HI - LO);
-  ctx.strokeStyle = "rgba(255,255,255,0.035)"; ctx.lineWidth = 1;
-  ctx.beginPath();
-  for (let p = LO + 48; p < HI; p += 48) { ctx.moveTo(p, LO); ctx.lineTo(p, HI); ctx.moveTo(LO, p); ctx.lineTo(HI, p); }
-  ctx.stroke();
-  // inner bevel: shaded top + left walls, lit bottom edge
-  ctx.fillStyle = "rgba(0,0,0,0.25)";
-  ctx.beginPath(); ctx.moveTo(LO, LO); ctx.lineTo(HI, LO); ctx.lineTo(HI - 10, LO + 10); ctx.lineTo(LO + 10, LO + 10); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = "rgba(0,0,0,0.16)";
-  ctx.beginPath(); ctx.moveTo(LO, LO); ctx.lineTo(LO + 10, LO + 10); ctx.lineTo(LO + 10, HI - 10); ctx.lineTo(LO, HI); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,0.05)";
-  ctx.beginPath(); ctx.moveTo(LO, HI); ctx.lineTo(LO + 10, HI - 10); ctx.lineTo(HI - 10, HI - 10); ctx.lineTo(HI, HI); ctx.closePath(); ctx.fill();
-}
-
-function circle(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); }
-
-function drawGlyph(b) {
-  ctx.save(); ctx.translate(b.x, b.y);
-  ctx.globalAlpha = 0.3;
-  const c = b.type === "bomb" ? "#ffffff" : b.f.edge;
-  ctx.strokeStyle = c; ctx.fillStyle = c; ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.lineJoin = "round";
-  if (b.type === "archer") {
-    ctx.beginPath(); ctx.moveTo(-15, 15); ctx.lineTo(11, -11); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(17, -17); ctx.lineTo(2, -14); ctx.lineTo(14, -2); ctx.closePath(); ctx.fill();
-  } else if (b.type === "bomb") {
-    for (let i = 0; i < 8; i++) { const a = i * TAU / 8; circle(Math.cos(a) * b.r * 0.68, Math.sin(a) * b.r * 0.68, 2.4); ctx.fill(); }
-  } else if (b.type === "blade") {
-    ctx.rotate(b.spinA * 0.4);
-    for (let i = 0; i < 3; i++) { ctx.rotate(TAU / 3); ctx.beginPath(); ctx.moveTo(-4, -6); ctx.lineTo(5, -26); ctx.lineTo(4, -6); ctx.closePath(); ctx.fill(); }
-  } else {
-    ctx.beginPath(); ctx.moveTo(5, -23); ctx.lineTo(-11, 3); ctx.lineTo(0, 3); ctx.lineTo(-5, 23); ctx.lineTo(11, -3); ctx.lineTo(0, -3); ctx.closePath(); ctx.fill();
-  }
-  ctx.restore();
-}
-
-function drawBlades(b) {
-  const fade = Math.min(1, b.spin / 0.3);
-  ctx.save(); ctx.translate(b.x, b.y);
-  ctx.globalAlpha = 0.14 * fade; ctx.strokeStyle = b.f.body; ctx.lineWidth = BL - 6;
-  circle(0, 0, b.r + BL / 2 + 1); ctx.stroke();
-  ctx.globalAlpha = fade;
-  for (let k = 0; k < 3; k++) {
-    ctx.save(); ctx.rotate(b.spinA + k * TAU / 3);
-    ctx.beginPath();
-    ctx.moveTo(b.r + 2, -7);
-    ctx.quadraticCurveTo(b.r + BL * 0.6, -11, b.r + BL, 0);
-    ctx.quadraticCurveTo(b.r + BL * 0.5, 2, b.r + 2, 7);
-    ctx.closePath();
-    ctx.fillStyle = "#eef2fb"; ctx.fill();
-    ctx.lineWidth = 2; ctx.strokeStyle = b.f.edge; ctx.stroke();
-    ctx.restore();
-  }
-  ctx.restore();
-}
-
-function drawBall(b) {
-  for (const p of b.trail) {
-    ctx.globalAlpha = (p.life / 0.22) * 0.3; ctx.fillStyle = b.f.body;
-    circle(p.x, p.y, b.r * 0.85); ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-  if (b.spin > 0) drawBlades(b);
-  if (b.dash > 0) { ctx.save(); ctx.shadowColor = b.f.body; ctx.shadowBlur = 24; }
-  ctx.fillStyle = b.f.body; circle(b.x, b.y, b.r); ctx.fill();
-  if (b.dash > 0) ctx.restore();
-  const hl = ctx.createRadialGradient(b.x - b.r * 0.38, b.y - b.r * 0.42, 1, b.x - b.r * 0.2, b.y - b.r * 0.2, b.r * 1.05);
-  hl.addColorStop(0, "rgba(255,255,255,0.5)"); hl.addColorStop(0.45, "rgba(255,255,255,0.08)"); hl.addColorStop(1, "rgba(0,0,0,0.18)");
-  ctx.fillStyle = hl; circle(b.x, b.y, b.r); ctx.fill();
-  ctx.lineWidth = 4; ctx.strokeStyle = b.f.edge; circle(b.x, b.y, b.r - 2); ctx.stroke();
-  drawGlyph(b);
-  const ready = 1 - clamp(b.cd, 0, b.f.cd) / b.f.cd;
-  if (b.type === "bomb") {
-    // fuse cap with a spark once the next bomb is nearly ready
-    const a = -Math.PI / 4, cx = b.x + Math.cos(a) * (b.r - 2), cy = b.y + Math.sin(a) * (b.r - 2);
-    ctx.save(); ctx.translate(cx, cy); ctx.rotate(a + Math.PI / 2);
-    ctx.fillStyle = "#2a3142"; ctx.fillRect(-7, -9, 14, 9);
-    ctx.strokeStyle = "#c9a36a"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(0, -9); ctx.quadraticCurveTo(6, -16, 2, -21); ctx.stroke();
-    if (ready > 0.8 && Math.sin(S.t * 40) > 0) { ctx.fillStyle = "#ffcf5a"; ctx.shadowColor = "#ff9a3c"; ctx.shadowBlur = 12; circle(2, -22, 4); ctx.fill(); }
-    ctx.restore();
-  }
-  if (b.flash > 0) { ctx.globalAlpha = b.flash / 0.12 * 0.7; ctx.fillStyle = "#ffffff"; circle(b.x, b.y, b.r); ctx.fill(); ctx.globalAlpha = 1; }
-  // cooldown ring
-  ctx.lineCap = "round"; ctx.lineWidth = 3.5;
-  ctx.strokeStyle = "rgba(255,255,255,0.12)"; circle(b.x, b.y, b.r + 7); ctx.stroke();
-  ctx.strokeStyle = b.f.ink; ctx.globalAlpha = ready > 0.97 ? 1 : 0.75;
-  ctx.beginPath(); ctx.arc(b.x, b.y, b.r + 7, -Math.PI / 2, -Math.PI / 2 + TAU * ready); ctx.stroke();
-  ctx.globalAlpha = 1; ctx.lineCap = "butt";
-  // HP number
-  ctx.font = '30px "Lilita One", "Arial Rounded MT Bold", sans-serif';
-  ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  const txt = String(Math.ceil(b.hp));
-  ctx.lineJoin = "round"; ctx.lineWidth = 6; ctx.strokeStyle = "rgba(8,14,30,0.9)";
-  ctx.strokeText(txt, b.x, b.y + 1); ctx.fillStyle = "#ffffff"; ctx.fillText(txt, b.x, b.y + 1);
-}
-
-function drawArrows() {
-  for (const a of S.arrows) {
-    const s = hyp(a.vx, a.vy), ux = a.vx / s, uy = a.vy / s;
-    const len = Math.min(140, hyp(a.x - a.sx, a.y - a.sy));
-    const tx = a.x - ux * len, ty = a.y - uy * len;
-    const g = ctx.createLinearGradient(tx, ty, a.x, a.y);
-    g.addColorStop(0, "rgba(120,220,255,0)"); g.addColorStop(1, "rgba(120,220,255,0.55)");
-    ctx.strokeStyle = g; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(a.x, a.y); ctx.stroke();
-    ctx.save(); ctx.shadowColor = "#3fc6ff"; ctx.shadowBlur = 14;
-    ctx.strokeStyle = "#c8f3ff"; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(a.x - ux * 30, a.y - uy * 30); ctx.lineTo(a.x - ux * 6, a.y - uy * 6); ctx.stroke();
-    ctx.fillStyle = "#effcff";
-    ctx.beginPath(); ctx.moveTo(a.x + ux * 7, a.y + uy * 7);
-    ctx.lineTo(a.x - ux * 10 - uy * 7, a.y - uy * 10 + ux * 7);
-    ctx.lineTo(a.x - ux * 10 + uy * 7, a.y - uy * 10 - ux * 7);
-    ctx.closePath(); ctx.fill();
-    ctx.restore();
-  }
-}
-
-function drawBombs() {
-  for (const bm of S.bombs) {
-    if (bm.fuse < 0.4) {
-      ctx.globalAlpha = 0.35 + 0.35 * Math.sin(S.t * 50);
-      ctx.fillStyle = "#ff5a3c"; circle(bm.x, bm.y, bm.r + 6); ctx.fill(); ctx.globalAlpha = 1;
-    }
-    ctx.fillStyle = "#1c2232"; circle(bm.x, bm.y, bm.r); ctx.fill();
-    ctx.lineWidth = 2; ctx.strokeStyle = "#05080f"; ctx.stroke();
-    ctx.fillStyle = "rgba(255,255,255,0.35)"; circle(bm.x - 4, bm.y - 4, 3); ctx.fill();
-    ctx.strokeStyle = "#c9a36a"; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(bm.x + 6, bm.y - 8); ctx.quadraticCurveTo(bm.x + 12, bm.y - 12, bm.x + 10, bm.y - 17); ctx.stroke();
-    const rate = bm.fuse < 0.4 ? 60 : 24;
-    if (Math.sin(S.t * rate) > -0.2) {
-      ctx.save(); ctx.fillStyle = "#ffd36a"; ctx.shadowColor = "#ff9a3c"; ctx.shadowBlur = 12;
-      circle(bm.x + 10, bm.y - 18, 3.5); ctx.fill(); ctx.restore();
-    }
-  }
-}
-
-function drawFx() {
-  for (const r of S.rings) {
-    const p = 1 - r.life / r.max, e = 1 - Math.pow(1 - p, 3), rad = r.r0 + (r.r1 - r.r0) * e;
-    ctx.globalAlpha = 1 - p;
-    if (r.fill) { ctx.fillStyle = r.color; ctx.globalAlpha = (1 - p) * 0.4; circle(r.x, r.y, rad); ctx.fill(); }
-    else { ctx.strokeStyle = r.color; ctx.lineWidth = r.width * (1 - p * 0.6); circle(r.x, r.y, rad); ctx.stroke(); }
-  }
-  for (const p of S.parts) {
-    ctx.globalAlpha = p.life / p.max; ctx.fillStyle = p.color;
-    circle(p.x, p.y, p.size * (0.4 + 0.6 * p.life / p.max)); ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-  for (const b of S.bolts) {
-    ctx.save(); ctx.globalAlpha = b.life / b.max; ctx.strokeStyle = b.color; ctx.lineWidth = 3;
-    ctx.shadowColor = "#ffd43b"; ctx.shadowBlur = 14; ctx.lineJoin = "round";
-    ctx.beginPath(); b.pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke();
-    ctx.restore();
-  }
-  ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
-  for (const t of S.texts) {
-    ctx.globalAlpha = clamp(t.life / 0.5, 0, 1);
-    ctx.font = t.thai ? '600 20px "Kanit", sans-serif' : '24px "Lilita One", "Arial Rounded MT Bold", sans-serif';
-    ctx.lineWidth = 5; ctx.strokeStyle = "rgba(8,14,30,0.9)"; ctx.strokeText(t.txt, t.x, t.y);
-    ctx.fillStyle = t.color; ctx.fillText(t.txt, t.x, t.y);
-  }
-  ctx.globalAlpha = 1;
-}
-
-function draw() {
-  const w = cv.width, k = w / L;
-  let sx = 0, sy = 0;
-  if (S.shake > 0 && !reduceMotion) { sx = rand(-1, 1) * S.shake; sy = rand(-1, 1) * S.shake; }
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, w, w);
-  ctx.setTransform(k, 0, 0, k, sx * k, sy * k);
-  drawArena();
-  drawBombs();
-  drawArrows();
-  for (const b of S.balls) if (b.alive) drawBall(b);
-  drawFx();
-}
-
-/* ---------------- HUD + UI ---------------- */
-const hud = ["#hudL", "#hudR"].map(sel => {
-  const el = $(sel);
-  return { el, en: el.querySelector(".en"), th: el.querySelector(".th"), bar: el.querySelector(".bar i"),
-           hpn: el.querySelector(".hpn"), skt: el.querySelector(".skt"), cd: el.querySelector(".cd i"), lastHp: -1, lastTxt: "" };
-});
-function setupHud() {
-  S.balls.forEach((b, i) => {
-    const h = hud[i];
-    h.el.style.setProperty("--c", b.f.ink);
-    h.en.textContent = b.f.en; h.th.textContent = b.f.th;
-    h.lastHp = -1; h.lastTxt = "";
-  });
-  updateHud();
-}
-function updateHud() {
-  S.balls.forEach((b, i) => {
-    const h = hud[i], hp = Math.max(0, Math.ceil(b.hp));
-    if (hp !== h.lastHp) { h.bar.style.width = hp + "%"; h.hpn.textContent = hp; h.lastHp = hp; }
-    const ready = b.alive ? 1 - clamp(b.cd, 0, b.f.cd) / b.f.cd : 0;
-    h.cd.style.width = (ready * 100).toFixed(1) + "%";
-    const txt = !b.alive ? "แพ้" : (b.dash > 0 || b.spin > 0) ? b.f.skill + "!" : `${b.f.skill} · ${Math.max(0, b.cd).toFixed(1)} วิ`;
-    if (txt !== h.lastTxt) { h.skt.textContent = txt; h.lastTxt = txt; }
-  });
-}
-
-function showWinner() {
-  const w = S.winner;
-  ov.style.setProperty("--c", w.f.ink);
-  $("#ovName").textContent = w.f.en;
-  $("#ovTh").textContent = `${w.f.th} ชนะ · เหลือ HP ${Math.ceil(w.hp)}`;
-  ov.hidden = false;
-}
-
-function setVars(el, f) { el.style.setProperty("--c", f.ink); el.style.setProperty("--b", f.body); el.style.setProperty("--e", f.edge); }
-
-function buildPickers() {
-  for (const side of ["L", "R"]) {
-    const box = $("#chips" + side);
-    box.innerHTML = "";
-    for (const id of ORDER) {
-      const f = FIGHTERS[id], b = document.createElement("button");
-      b.type = "button"; b.className = "chip"; b.id = `chip-${side}-${id}`; b.dataset.id = id;
-      setVars(b, f);
-      b.innerHTML = `<span class="orb"></span>${f.th}`;
-      b.addEventListener("click", () => choose(side, id));
-      box.appendChild(b);
-    }
-  }
-  syncChips();
-}
-function syncChips() {
-  for (const side of ["L", "R"])
-    document.querySelectorAll(`#chips${side} .chip`).forEach(c => c.setAttribute("aria-pressed", String(c.dataset.id === pick[side])));
-}
-function choose(side, id) {
-  const other = side === "L" ? "R" : "L";
-  if (pick[other] === id) pick[other] = pick[side];
-  pick[side] = id; syncChips(); newMatch();
-}
-function randomize() {
-  const a = ORDER[Math.floor(Math.random() * 4)];
-  let b; do { b = ORDER[Math.floor(Math.random() * 4)]; } while (b === a);
-  pick = { L: a, R: b }; syncChips(); newMatch();
-}
-
-function buildRoster() {
-  const box = $("#roster"); box.innerHTML = "";
-  for (const id of ORDER) {
-    const f = FIGHTERS[id], c = document.createElement("article");
-    c.className = "card"; setVars(c, f);
-    c.innerHTML = `<div class="top"><span class="orb"></span><div><div class="en">${f.en}</div><div class="th">${f.th}</div></div></div>
-      <div class="sk">${f.skill}</div><p>${f.desc}</p>
-      <div class="stats"><span class="pill">คูลดาวน์ ${f.cd} วิ</span><span class="pill">ดาเมจ ${f.dmg}</span><span class="pill" id="w-${id}">ชนะ ${wins[id] || 0}</span></div>`;
-    box.appendChild(c);
-  }
-}
-
-function syncPause() { $("#pause").textContent = paused ? "เล่นต่อ" : "หยุด"; }
-$("#pause").addEventListener("click", () => { paused = !paused; syncPause(); });
-$("#restart").addEventListener("click", newMatch);
-$("#again").addEventListener("click", newMatch);
-$("#againRandom").addEventListener("click", randomize);
-$("#randomize").addEventListener("click", randomize);
-document.querySelectorAll(".seg button").forEach(btn => btn.addEventListener("click", () => {
-  speed = Number(btn.dataset.sp);
-  document.querySelectorAll(".seg button").forEach(x => x.setAttribute("aria-pressed", String(x === btn)));
-}));
-$("#grav").addEventListener("click", e => {
-  gravityOn = !gravityOn;
-  e.currentTarget.setAttribute("aria-pressed", String(gravityOn));
-  e.currentTarget.textContent = "แรงโน้มถ่วง: " + (gravityOn ? "เปิด" : "ปิด");
-});
-document.addEventListener("keydown", e => {
-  if (e.code === "Space" && !/INPUT|TEXTAREA|BUTTON/.test(document.activeElement.tagName)) { e.preventDefault(); paused = !paused; syncPause(); }
-});
-
-/* ---------------- loop ---------------- */
-buildPickers();
-buildRoster();
-newMatch();
-let last = performance.now(), acc = 0;
-const DT = 1 / 120;
-function frame(now) {
-  const ft = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now;
-  if (!paused) {
-    acc += ft * speed;
-    let n = 0;
-    while (acc >= DT && n < 30) { step(DT); acc -= DT; n++; }
-    if (n >= 30) acc = 0;
-    if (S.over && S.overT > 0) { S.overT -= ft * speed; if (S.overT <= 0) showWinner(); }
-  }
-  S.shake = Math.max(0, S.shake - ft * 40);
-  draw();
-  updateHud();
-  requestAnimationFrame(frame);
-}
-requestAnimationFrame(frame);
-})();
-</script>
-
+<script type="module" src="js/main.js"></script>
 </body>
 </html>
