@@ -4,7 +4,7 @@ import { MqttLite } from "./mqtt-lite.js";
 import { ORDER } from "./fighters.js";
 
 const DEFAULT_BROKERS = ["wss://broker.hivemq.com:8884/mqtt", "wss://broker.emqx.io:8084/mqtt"];
-const PREFIX = "ballvsball-x25/v2/room/";
+const PREFIX = "ballvsball-x25/v3/room/";   // bump when the fight rules change, so old and new versions never share a room
 const HB_MS = 2500, LOST_MS = 10000;
 
 function brokerList() {

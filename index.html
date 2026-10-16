@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ball vs Ball</title>
-<meta name="description" content="เกมลูกบอลสกิลสู้กันในกรง 9 นักสู้ เด้งตามฟิสิกส์ เล่นออนไลน์กับเพื่อนด้วยรหัสห้อง">
+<meta name="description" content="เกมลูกบอลสกิลสู้กันในกรง 10 นักสู้ เด้งตามฟิสิกส์ เล่นออนไลน์กับเพื่อนด้วยรหัสห้อง">
 <meta name="theme-color" content="#0b1530">
 <meta name="color-scheme" content="dark">
 <link rel="manifest" href="manifest.webmanifest">
@@ -14,12 +14,13 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Ball vs Ball">
-<meta property="og:description" content="ลูกบอลสกิลสู้กันในกรง 9 นักสู้ เล่นออนไลน์กับเพื่อนได้">
+<meta property="og:description" content="ลูกบอลสกิลสู้กันในกรง 10 นักสู้ เล่นออนไลน์กับเพื่อนได้">
 <meta property="og:image" content="https://xaisanatvtz25-ctrl.github.io/ball-vs-ball/img/cover.jpg">
 <meta property="og:url" content="https://xaisanatvtz25-ctrl.github.io/ball-vs-ball/">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preload" href="fonts/lilita-400.woff" as="font" type="font/woff" crossorigin>
 <link rel="preload" href="fonts/kanit-500.woff" as="font" type="font/woff" crossorigin>
+<link rel="preload" href="img/fighters/yosai-idle.jpg" as="image">
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
@@ -51,7 +52,7 @@
         <span class="logo-vs">VS</span>
         <span class="logo-word">BALL</span>
       </div>
-      <p class="tagline">ลูกบอลสกิลสู้กันในกรง · 9 นักสู้</p>
+      <p class="tagline">ลูกบอลสกิลสู้กันในกรง · 10 นักสู้</p>
       <nav class="home-menu" aria-label="เมนูหลัก">
         <button class="bigbtn gold" id="btn-play" type="button">
           <svg class="ico"><use href="#i-play"/></svg>
@@ -68,7 +69,7 @@
       </nav>
       <div class="home-foot">
         <button class="pill install-btn" type="button" data-install><svg class="ico"><use href="#i-download"/></svg>ติดตั้งแอป</button>
-        <span class="ver">v2.0</span>
+        <span class="ver">v2.1</span>
       </div>
     </div>
   </section>
@@ -118,6 +119,7 @@
         <div class="bar"><i></i></div>
         <div class="meta"><span>HP <b class="hpn">100</b></span><span class="skt"></span></div>
         <div class="cd"><i></i></div>
+        <div class="ult" hidden title="ไฟอันติ"><i></i></div>
         <div class="chips"></div>
       </div>
       <div class="vsmark">VS</div>
@@ -126,6 +128,7 @@
         <div class="bar"><i></i></div>
         <div class="meta"><span>HP <b class="hpn">100</b></span><span class="skt"></span></div>
         <div class="cd"><i></i></div>
+        <div class="ult" hidden title="ไฟอันติ"><i></i></div>
         <div class="chips"></div>
       </div>
     </section>
@@ -177,7 +180,7 @@
   <section class="screen" data-screen="roster" hidden>
     <header class="topbar">
       <button class="iconbtn" type="button" data-back aria-label="ย้อนกลับ"><svg><use href="#i-back"/></svg></button>
-      <h1>ตัวละครทั้ง 9</h1>
+      <h1>ตัวละครทั้ง 10</h1>
       <span class="iconbtn ghost" aria-hidden="true"></span>
     </header>
     <div class="scroll"><div class="roster" id="roster"></div></div>
@@ -210,7 +213,7 @@
         <div class="row"><span>ติดตั้งลงมือถือ<small>เปิดเล่นจากหน้าจอหลักได้เหมือนแอป</small></span><button class="pill install-btn" type="button" data-install><svg class="ico"><use href="#i-download"/></svg>ติดตั้ง</button></div>
         <div class="row"><span>สถิติชนะ<small>นับจำนวนครั้งที่แต่ละลูกชนะ</small></span><button class="pill danger" type="button" id="set-reset">ล้างสถิติ</button></div>
       </div>
-      <p class="fine">Ball vs Ball v2.0 · ฟอนต์ Kanit และ Lilita One (SIL Open Font License)</p>
+      <p class="fine">Ball vs Ball v2.1 · ฟอนต์ Kanit, Lilita One และ Noto Sans Lao (SIL Open Font License)</p>
     </div>
   </section>
 

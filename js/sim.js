@@ -12,6 +12,8 @@ export const PI = 3.141592653589793, TAU = 2 * PI, HALF_PI = PI / 2;
 export const TIME_LIMIT = 90;           // seconds; then higher HP wins
 export const FEVER_AT = 45;             // seconds; after this every hit does double damage
 const MIN_VY = Math.sqrt(2 * G * 260);  // keeps floor bounces lively
+export let CD_JITTER = 0.15;            // seeded +-15% on every cooldown, so skill timings never lock into a loop
+export const setJitter = v => { CD_JITTER = v; };
 
 // Fight numbers (balanced with tools/balance test runs).
 export const P = {
@@ -23,8 +25,23 @@ export const P = {
   vampire: { range: 300, dur: 1.25, tick: 0.25, dmg: 2, heal: 1 },
   frost:   { spread: 0.26, speed: 760, dmg: 5, chill: 1.2 },
   blaze:   { dur: 3.0, gap: 30, life: 2.0, r: 22, burn: 1.7, tick: 0.55, dmg: 2 },
-  magnet:  { dur: 1.5, pull: 2000, dmg: 13, knock: 380 }
+  magnet:  { dur: 1.5, pull: 2000, dmg: 13, knock: 380 },
+  yosai: {
+    lunge: 900, lungeDur: 0.6, steer: 5, bladeGap: 0.4,   // basic: homing leap
+    stabs: 3, first: 0.1, gap: 0.16, dmg: 4, hold: 0.18, kick: 420,
+    ultPerStab: 10, ultPerHurt: 0.6,                 // ult meter gain (0..100)
+    ignite: 0.55,                                    // ult: wings spread, hovering
+    dash: 1350, dashDur: 0.9, dashSteer: 9,
+    uStabs: 5, uFirst: 0.08, uGap: 0.13, uDmg: 4,
+    boomDelay: 0.16, boomDmg: 12, boomR: 120, boomKnock: 650
+  }
 };
+
+// Yosai phases
+export const PH = { IDLE: 0, LUNGE: 1, LATCH: 2, IGNITE: 3, DASH: 4, ULATCH: 5 };
+const latched = b => b.type === "yosai" && (b.ph === PH.LATCH || b.ph === PH.ULATCH);
+const flying = b => b.type === "yosai" && (b.ph === PH.LUNGE || b.ph === PH.IGNITE || b.ph === PH.DASH);
+export const busy = b => b.act > 0 || b.ph > 0;
 
 // ---------- deterministic helpers ----------
 export function dsin(x) {
@@ -77,14 +94,18 @@ function makeBall(S, type, side) {
     acc: 0,      // blaze distance since last fire patch
     chill: 0,    // frost slow
     burn: 0, btick: 0, bsrc: -1,
-    dealt: 0
+    dealt: 0,
+    ph: 0, pt: 0,          // yosai phase + phase timer
+    lx: 0, ly: 0,          // latch offset (unit vector from target to yosai)
+    sc: 0, st: 0,          // stabs done + stab timer
+    ult: 0                 // ult meter 0..100
   };
 }
 
 export function createMatch({ seed, left, right, gravity = true }) {
   if (!FIGHTERS[left] || !FIGHTERS[right]) throw new Error("unknown fighter");
   const S = {
-    v: 2, f: 0, rs: seed | 0, grav: !!gravity,
+    v: 3, f: 0, rs: seed | 0, grav: !!gravity,
     balls: [], proj: [], bombs: [], fires: [],
     over: false, win: -1, koF: -1, timeout: false, fever: false, ev: []
   };
@@ -107,12 +128,19 @@ function hurt(S, ti, dmg, si, kind) {
   t.hp = Math.max(0, t.hp - dmg);
   S.balls[si].dealt += dmg;
   S.ev.push({ k: "hit", i: ti, src: si, dmg, kind, x: t.x, y: t.y });
+  if (t.type === "yosai" && t.hp > 0) gainUlt(S, t, dmg * P.yosai.ultPerHurt);
   if (t.hp <= 0) {
     t.alive = false;
     S.over = true; S.win = si; S.koF = S.f;
     S.ev.push({ k: "ko", i: ti, src: si, x: t.x, y: t.y });
   }
   return true;
+}
+
+function gainUlt(S, b, amt) {
+  if (b.ult >= 100) return;
+  b.ult = Math.min(100, b.ult + amt);
+  if (b.ult >= 100) S.ev.push({ k: "ultReady", i: b.side, x: b.x, y: b.y });
 }
 
 function heal(S, i, amt) {
@@ -137,7 +165,7 @@ function wall(S, b) {
   if (b.y - b.r < LO) { b.y = LO + b.r; b.vy = Math.abs(b.vy); hit = Math.max(hit, b.vy); }
   else if (b.y + b.r > HI) { b.y = HI - b.r; b.vy = -Math.abs(b.vy); hit = Math.max(hit, -b.vy); floor = true; }
   if (hit) S.ev.push({ k: "wall", i: b.side, x: b.x, y: b.y, sp: hit });
-  if (b.type === "volt" && b.act > 0) return;
+  if ((b.type === "volt" && b.act > 0) || flying(b)) return;
   if (S.grav && floor) {
     if (-b.vy < MIN_VY) b.vy = -MIN_VY;
     if (Math.abs(b.vx) < 120) b.vx = (b.vx < 0 ? -1 : 1) * 120;
@@ -214,8 +242,103 @@ function cast(S, b, o) {
       b.act = P.magnet.dur;
       S.ev.push({ k: "cast", i, kind: "magnet", x: b.x, y: b.y });
       return true;
+    case "yosai": {
+      const Y = P.yosai;
+      if (o.type === "blade" && (o.act > 0 || o.cd < Y.bladeGap)) return false;   // waits for a safe gap between spins
+      if (b.ult >= 100) {                            // fire ult: wings out, then dash
+        b.ult = 0; b.ph = PH.IGNITE; b.pt = Y.ignite;
+        S.ev.push({ k: "cast", i, kind: "yosaiUlt", x: b.x, y: b.y });
+        return true;
+      }
+      let dx = o.x - b.x, dy = o.y - b.y;
+      const d = len(dx, dy) || 1; dx /= d; dy /= d;
+      b.ph = PH.LUNGE; b.pt = Y.lungeDur;
+      b.vx = dx * Y.lunge; b.vy = dy * Y.lunge;
+      S.ev.push({ k: "cast", i, kind: "yosai", x: b.x, y: b.y, dx, dy });
+      return true;
+    }
   }
   return false;
+}
+
+// ---------- yosai ----------
+function steer(b, o, speed, k) {
+  let dx = o.x - b.x, dy = o.y - b.y;
+  const d = len(dx, dy) || 1; dx /= d; dy /= d;
+  const a = Math.min(1, k * DT);
+  b.vx += (dx * speed - b.vx) * a; b.vy += (dy * speed - b.vy) * a;
+  const s = len(b.vx, b.vy) || 1;
+  b.vx *= speed / s; b.vy *= speed / s;
+}
+
+function yosaiFly(S, b, o) {                     // runs before movement
+  const Y = P.yosai;
+  if (b.ph === PH.LUNGE) {
+    if (o.alive) steer(b, o, Y.lunge, Y.steer);
+    b.pt -= DT;
+    if (b.pt <= 0) { b.ph = PH.IDLE; b.pt = 0; limit(b, 720); }
+  } else if (b.ph === PH.IGNITE) {
+    b.vx *= 0.94; b.vy *= 0.94;
+    b.pt -= DT;
+    if (b.pt <= 0) {
+      let dx = o.x - b.x, dy = o.y - b.y;
+      const d = len(dx, dy) || 1; dx /= d; dy /= d;
+      b.ph = PH.DASH; b.pt = Y.dashDur;
+      b.vx = dx * Y.dash; b.vy = dy * Y.dash;
+      S.ev.push({ k: "ultDash", i: b.side, x: b.x, y: b.y, dx, dy });
+    }
+  } else if (b.ph === PH.DASH) {
+    if (o.alive) steer(b, o, Y.dash, Y.dashSteer);
+    b.pt -= DT;
+    if (b.pt <= 0) { b.ph = PH.IDLE; b.pt = 0; limit(b, 720); }
+  }
+}
+
+function release(S, b, o, k) {
+  const Y = P.yosai;
+  b.ph = PH.IDLE; b.sc = 0; b.st = 0; b.pt = 0;
+  b.vx = o.vx * 0.3 + b.lx * Y.kick * k;
+  b.vy = o.vy * 0.3 + b.ly * Y.kick * k - (S.grav ? 120 : 0);
+  if (o.alive) { o.vx -= b.lx * Y.kick * 0.6 * k; o.vy -= b.ly * Y.kick * 0.6 * k; }
+  S.ev.push({ k: "release", i: b.side, x: b.x, y: b.y });
+}
+
+function fireworks(S, b, o, i) {
+  const Y = P.yosai;
+  S.ev.push({ k: "fireworks", i, x: o.x, y: o.y, r: Y.boomR });
+  if (o.alive) {
+    const dx = o.x - b.x, dy = o.y - b.y, d = len(dx, dy) || 1;
+    o.vx += dx / d * Y.boomKnock; o.vy += dy / d * Y.boomKnock;
+    hurt(S, 1 - i, Y.boomDmg, i, "fireworks");
+  }
+  b.ph = PH.IDLE; b.sc = 0; b.st = 0; b.pt = 0;
+  b.vx = b.lx * 520; b.vy = b.ly * 520 - (S.grav ? 150 : 0);
+}
+
+function latchTick(S) {                          // runs after both balls moved
+  const Y = P.yosai;
+  for (let i = 0; i < 2; i++) {
+    const b = S.balls[i];
+    if (!b.alive || !latched(b)) continue;
+    const o = S.balls[1 - i];
+    if (!o.alive) { release(S, b, o, 0.4); continue; }
+    const D = o.r + b.r - 4;
+    b.x = clamp(o.x + b.lx * D, LO + b.r, HI - b.r);
+    b.y = clamp(o.y + b.ly * D, LO + b.r, HI - b.r);
+    b.vx = o.vx; b.vy = o.vy;
+    const ult = b.ph === PH.ULATCH, n = ult ? Y.uStabs : Y.stabs;
+    if (!ult && (o.type === "shield" || o.type === "blade") && o.act > 0) { release(S, b, o, 1); continue; }   // jumps off when the target defends
+    b.st -= DT;
+    if (b.st > 0) continue;
+    if (b.sc < n) {
+      b.sc++;
+      b.st += b.sc < n ? (ult ? Y.uGap : Y.gap) : (ult ? Y.boomDelay : Y.hold);
+      S.ev.push({ k: "stab", i, x: o.x + b.lx * o.r, y: o.y + b.ly * o.r, ult, n: b.sc });
+      if (hurt(S, 1 - i, ult ? Y.uDmg : Y.dmg, i, ult ? "ustab" : "stab") && !ult) gainUlt(S, b, Y.ultPerStab);
+      if (o.alive) { o.vx -= b.lx * 40; o.vy -= b.ly * 40; }
+    } else if (ult) fireworks(S, b, o, i);
+    else release(S, b, o, 1);
+  }
 }
 
 // ---------- contacts ----------
@@ -243,11 +366,24 @@ function contact(S, p, q, nx, ny) {     // p acts on q, (nx, ny) points from p t
 }
 
 function collide(S, a, b) {
+  if (latched(a) || latched(b)) return;          // riding the target: no bounce
   const dx = b.x - a.x, dy = b.y - a.y;
   const d = len(dx, dy) || 0.0001;
   const ov = a.r + b.r - d;
   if (ov <= 0) return;
   const nx = dx / d, ny = dy / d;
+  if (!S.over) {
+    for (const [y, t, sg] of [[a, b, 1], [b, a, -1]]) {
+      if (y.type !== "yosai" || (y.ph !== PH.LUNGE && y.ph !== PH.DASH)) continue;
+      const ult = y.ph === PH.DASH;
+      y.lx = -nx * sg; y.ly = -ny * sg;              // from target to yosai
+      y.ph = ult ? PH.ULATCH : PH.LATCH; y.pt = 0;
+      y.sc = 0; y.st = ult ? P.yosai.uFirst : P.yosai.first;
+      S.ev.push({ k: "latch", i: y.side, x: t.x + y.lx * t.r, y: t.y + y.ly * t.r, ult });
+      contact(S, t, y, y.lx, y.ly);                  // target's own touch effects still land
+      return;
+    }
+  }
   const ia = 1 / a.m, ib = 1 / b.m, tot = ia + ib;
   a.x -= nx * ov * (ia / tot); a.y -= ny * ov * (ia / tot);
   b.x += nx * ov * (ib / tot); b.y += ny * ov * (ib / tot);
@@ -395,7 +531,8 @@ export function step(S) {
     if (b.type === "volt" && b.act > 0) {
       b.act -= DT;
       if (b.act <= 0) { b.act = 0; limit(b, 720); }
-    } else if (S.grav) b.vy += G * DT;
+    } else if (S.grav && !flying(b) && !latched(b)) b.vy += G * DT;
+    if (b.type === "yosai") yosaiFly(S, b, o);
 
     if (b.type === "magnet" && b.act > 0) {
       b.act -= DT; if (b.act < 0) b.act = 0;
@@ -407,12 +544,14 @@ export function step(S) {
     }
 
     const px = b.x, py = b.y;
-    b.x += b.vx * DT; b.y += b.vy * DT;
-    wall(S, b);
+    if (!latched(b)) {
+      b.x += b.vx * DT; b.y += b.vy * DT;
+      wall(S, b);
+    }
 
-    if (!S.over) {
+    if (!S.over && b.ph === PH.IDLE && !latched(o)) {   // a ball with Yosai on its back can't start a skill
       b.cd -= DT * (b.chill > 0 ? 0.5 : 1);
-      if (b.cd <= 0) b.cd = o.alive && cast(S, b, o) ? f.cd : 0;
+      if (b.cd <= 0) b.cd = o.alive && cast(S, b, o) ? f.cd * rr(S, 1 - CD_JITTER, 1 + CD_JITTER) : 0;
     }
 
     if (b.type === "blade") {
@@ -452,6 +591,7 @@ export function step(S) {
     if (b.hitCD > 0) { b.hitCD -= DT; if (b.hitCD < 0) b.hitCD = 0; }
   }
 
+  latchTick(S);
   if (B[0].alive && B[1].alive) collide(S, B[0], B[1]);
   blades(S, 0); blades(S, 1);
   projectiles(S);
@@ -488,6 +628,7 @@ export function hashState(S) {
     mix(b.x); mix(b.y); mix(b.vx); mix(b.vy); mix(b.hp); mix(b.cd); mix(b.act); mix(b.hitCD);
     mix(b.spinA); mix(b.chill); mix(b.burn); mix(b.btick); mix(b.acc); mix(b.tick);
     mix(b.alive ? 1 : 0); mix(b.hit ? 1 : 0);
+    mix(b.ph); mix(b.pt); mix(b.lx); mix(b.ly); mix(b.sc); mix(b.st); mix(b.ult);
   }
   mix(S.proj.length); for (const p of S.proj) { mix(p.x); mix(p.y); mix(p.vx); mix(p.vy); mix(p.o); mix(p.life); }
   mix(S.bombs.length); for (const m of S.bombs) { mix(m.x); mix(m.y); mix(m.vx); mix(m.vy); mix(m.o); mix(m.fuse); }

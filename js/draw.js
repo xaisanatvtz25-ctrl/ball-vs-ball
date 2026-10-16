@@ -1,15 +1,66 @@
 // Canvas drawing: arena, balls, skills and visual effects.
 // Visual randomness (Math.random) is fine here: none of it feeds back into the fight.
 import { FIGHTERS, ORDER } from "./fighters.js";
-import { L, LO, HI, BL, P } from "./sim.js";
+import { L, LO, HI, BL, P, PH } from "./sim.js";
 
 const TAU = Math.PI * 2;
 const rand = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-export const DISPLAY = '"Lilita One", "Arial Rounded MT Bold", "Trebuchet MS", sans-serif';
-export const BODY = '"Kanit", "Noto Sans Thai", "Leelawadee UI", Tahoma, sans-serif';
+export const DISPLAY = '"Lilita One", "Noto Sans Lao", "Arial Rounded MT Bold", "Trebuchet MS", sans-serif';
+export const BODY = '"Kanit", "Noto Sans Lao", "Noto Sans Thai", "Leelawadee UI", Tahoma, sans-serif';
 
 function circle(ctx, x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); }
+function rrect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+
+// ---------------------------------------------------------------- photo faces (fighters with a `face` set)
+const faceImgs = {};
+export function loadFaces(timeout = 4000) {
+  const jobs = [];
+  for (const t of ORDER) {
+    const f = FIGHTERS[t];
+    if (!f.face || faceImgs[t]) continue;
+    faceImgs[t] = {};
+    for (const [k, src] of Object.entries(f.face)) {
+      const img = new Image();
+      jobs.push(new Promise(res => { img.onload = () => res(true); img.onerror = () => res(false); }));
+      img.src = src;
+      faceImgs[t][k] = img;
+    }
+  }
+  return Promise.race([Promise.all(jobs), new Promise(res => setTimeout(res, timeout))]);
+}
+const imgReady = img => !!img && img.complete && img.naturalWidth > 0;
+function faceImg(type, key) {
+  const set = faceImgs[type];
+  if (!set) return null;
+  if (imgReady(set[key])) return set[key];
+  return imgReady(set.idle) ? set.idle : null;
+}
+
+function drawFaceBall(ctx, f, img, r, opt) {      // ctx is already translated to the ball centre
+  const ring = Math.max(2.5, r * 0.13);
+  if (opt.glow) {
+    ctx.save(); ctx.shadowColor = opt.glowColor || f.ink; ctx.shadowBlur = opt.glow;
+    ctx.fillStyle = f.edge; circle(ctx, 0, 0, r); ctx.fill(); ctx.restore();
+  }
+  ctx.save();
+  circle(ctx, 0, 0, r - ring * 0.5); ctx.clip();
+  ctx.drawImage(img, -r, -r, r * 2, r * 2);
+  const sh = ctx.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.1, 0, 0, r);
+  sh.addColorStop(0, "rgba(255,255,255,0.12)"); sh.addColorStop(0.62, "rgba(255,255,255,0)"); sh.addColorStop(1, "rgba(0,0,0,0.3)");
+  ctx.fillStyle = sh; ctx.fillRect(-r, -r, r * 2, r * 2);
+  ctx.restore();
+  ctx.lineWidth = ring + 2.5; ctx.strokeStyle = f.edge; circle(ctx, 0, 0, r - ring / 2); ctx.stroke();
+  const g = ctx.createLinearGradient(0, -r, 0, r);
+  g.addColorStop(0, opt.hot ? "#fff3b0" : "#ffd25a");
+  g.addColorStop(0.5, opt.hot ? "#ffa03a" : "#ff8a3d");
+  g.addColorStop(1, opt.hot ? "#ff3d1f" : "#c92f1c");
+  ctx.lineWidth = ring; ctx.strokeStyle = g; circle(ctx, 0, 0, r - ring / 2); ctx.stroke();
+}
 
 // ---------------------------------------------------------------- arena
 export function drawArena(ctx, fever = 0) {
@@ -89,6 +140,11 @@ function glyph(ctx, type, s, spin = 0) {
       ctx.beginPath(); ctx.moveTo(0, 3); ctx.bezierCurveTo(3, 8, 7, 10, 6, 14); ctx.bezierCurveTo(5, 18, 2, 20, 0, 20);
       ctx.bezierCurveTo(-3, 20, -6, 17, -6, 14); ctx.bezierCurveTo(-6, 10, -2, 8, 0, 3); ctx.closePath(); ctx.fill();
       break;
+    case "yosai":
+      ctx.rotate(-0.7);
+      ctx.fillRect(-4, 6, 8, 16);
+      ctx.beginPath(); ctx.moveTo(-6, 4); ctx.lineTo(0, -24); ctx.lineTo(6, 4); ctx.closePath(); ctx.fill();
+      break;
     case "magnet":
       ctx.lineWidth = 6; ctx.lineCap = "butt";
       ctx.beginPath(); ctx.moveTo(-11, -15); ctx.lineTo(-11, 2); ctx.arc(0, 2, 11, Math.PI, 0, true); ctx.lineTo(11, -15); ctx.stroke();
@@ -100,6 +156,10 @@ function glyph(ctx, type, s, spin = 0) {
 // ---------------------------------------------------------------- ball body
 export function drawBallBody(ctx, type, x, y, r, opt = {}) {
   const f = FIGHTERS[type];
+  if (f.face) {
+    const img = faceImg(type, opt.face || "idle");
+    if (img) { ctx.save(); ctx.translate(x, y); drawFaceBall(ctx, f, img, r, opt); ctx.restore(); return; }
+  }
   ctx.save();
   ctx.translate(x, y);
   if (opt.glow) { ctx.shadowColor = f.body; ctx.shadowBlur = opt.glow; }
@@ -137,7 +197,7 @@ export function portrait(type, size = 128) {
   const ctx = c.getContext("2d");
   const r = size * 0.44;
   drawBallBody(ctx, type, size / 2, size / 2, r, { glyphAlpha: 0.95, spin: 0.3, spark: true });
-  portraitCache.set(key, c);
+  if (!FIGHTERS[type].face || faceImg(type, "idle")) portraitCache.set(key, c);   // retry later if the photo was not loaded yet
   return c;
 }
 export function portraitURL(type, size = 128) { return portrait(type, size).toDataURL("image/png"); }
@@ -204,6 +264,104 @@ function drawBurn(ctx, b) {
     flame(ctx, x, y, rand(0.85, 1.25), ang + Math.PI / 2, "#ff6a1a", "#ffd25a");
   }
   ctx.restore();
+}
+
+// ---------------------------------------------------------------- yosai: wings, flames, knife, cut marks
+function wingPath(ctx) {                          // right wing, root at (0,0), opening to +x
+  ctx.beginPath();
+  ctx.moveTo(0, 6);
+  ctx.quadraticCurveTo(14, -30, 58, -48);
+  ctx.lineTo(70, -44);
+  ctx.quadraticCurveTo(58, -26, 64, -10);
+  ctx.quadraticCurveTo(50, -16, 46, 0);
+  ctx.quadraticCurveTo(44, 8, 48, 18);
+  ctx.quadraticCurveTo(34, 10, 28, 22);
+  ctx.quadraticCurveTo(22, 14, 12, 20);
+  ctx.closePath();
+}
+function drawWings(ctx, b, t, spread, angle) {
+  if (spread <= 0.02) return;
+  const s = b.r / 36, flap = Math.sin(t * 13) * 0.14;
+  ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(angle);
+  for (const side of [-1, 1]) {
+    ctx.save();
+    ctx.scale(side * s, s);
+    ctx.translate(b.r * 0.32 / s, -b.r * 0.18 / s);
+    ctx.rotate(-0.22 + flap - (1 - spread) * 0.9);
+    ctx.scale(0.25 + 0.85 * spread, 0.6 + 0.4 * spread);
+    wingPath(ctx);
+    const g = ctx.createLinearGradient(0, -40, 60, 10);
+    g.addColorStop(0, "#2b0d0b"); g.addColorStop(0.6, "#120606"); g.addColorStop(1, "#4a120a");
+    ctx.fillStyle = g; ctx.shadowColor = "#ff5a1f"; ctx.shadowBlur = 16; ctx.fill();
+    ctx.shadowBlur = 0; ctx.lineWidth = 2.2; ctx.strokeStyle = "#ff6a2a"; ctx.stroke();
+    ctx.strokeStyle = "rgba(255,120,60,0.55)"; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(2, 6); ctx.lineTo(62, -10); ctx.moveTo(2, 6); ctx.lineTo(46, 4); ctx.moveTo(2, 6); ctx.lineTo(28, 20); ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+function wingState(b) {
+  if (b.ph === PH.IGNITE) {
+    const p = 1 - b.pt / P.yosai.ignite;
+    const e = p < 0.7 ? (p / 0.7) * 1.12 : 1.12 - (p - 0.7) / 0.3 * 0.12;   // overshoot then settle
+    return [Math.max(0, e), 0];
+  }
+  if (b.ph === PH.DASH) {
+    const s = Math.hypot(b.vx, b.vy) || 1;
+    return [0.8, Math.atan2(-b.vx / s, b.vy / s)];
+  }
+  if (b.ph === PH.ULATCH) return [1, Math.atan2(b.lx, -b.ly)];
+  return [0, 0];
+}
+function drawUltAura(ctx, b, t) {
+  const glow = ctx.createRadialGradient(b.x, b.y, b.r * 0.6, b.x, b.y, b.r * 2.1);
+  glow.addColorStop(0, "rgba(255,120,40,0.45)"); glow.addColorStop(1, "rgba(255,60,20,0)");
+  ctx.fillStyle = glow; circle(ctx, b.x, b.y, b.r * 2.1); ctx.fill();
+  for (let k = 0; k < 9; k++) {
+    const a = t * 2.2 + k * TAU / 9, rr = b.r + 3 + Math.sin(t * 17 + k) * 3;
+    flame(ctx, b.x + Math.cos(a) * rr, b.y + Math.sin(a) * rr, 0.9 + 0.35 * Math.sin(t * 23 + k * 2), a + Math.PI / 2, "#ff5a1f", "#ffd25a");
+  }
+}
+function drawUltReady(ctx, b, t) {
+  const pulse = 0.5 + 0.5 * Math.sin(t * 8);
+  ctx.save();
+  ctx.globalAlpha = 0.35 + 0.35 * pulse; ctx.strokeStyle = "#ff9a3c"; ctx.lineWidth = 4;
+  ctx.shadowColor = "#ff5a1f"; ctx.shadowBlur = 14;
+  circle(ctx, b.x, b.y, b.r + 12 + pulse * 3); ctx.stroke();
+  ctx.restore();
+}
+function drawKnife(ctx, x, y, ang, hot, ext) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.translate(ext * 12, 0);
+  ctx.fillStyle = "#3b2414"; rrect(ctx, -16, -3.6, 16, 7.2, 3); ctx.fill();
+  ctx.fillStyle = "#d9b26f"; ctx.fillRect(-1, -7.5, 4, 15);
+  if (hot) { ctx.shadowColor = "#ff6a2a"; ctx.shadowBlur = 16; }
+  const g = ctx.createLinearGradient(0, -5, 0, 5);
+  if (hot) { g.addColorStop(0, "#fff3b0"); g.addColorStop(1, "#ff8a2e"); }
+  else { g.addColorStop(0, "#ffffff"); g.addColorStop(0.5, "#d3dbe8"); g.addColorStop(1, "#8794aa"); }
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.moveTo(3, -5); ctx.lineTo(24, -2.5); ctx.lineTo(31, 0.5); ctx.lineTo(24, 3); ctx.lineTo(3, 5); ctx.closePath(); ctx.fill();
+  ctx.shadowBlur = 0; ctx.strokeStyle = "rgba(20,24,36,0.6)"; ctx.lineWidth = 1; ctx.stroke();
+  ctx.restore();
+}
+function drawYosaiKnife(ctx, b, o, stab) {
+  let dx, dy;
+  if (b.ph === PH.LATCH || b.ph === PH.ULATCH) { dx = -b.lx; dy = -b.ly; }
+  else { const s = Math.hypot(b.vx, b.vy) || 1; dx = b.vx / s; dy = b.vy / s; }
+  const hot = b.ph >= PH.IGNITE;
+  const ext = stab > 0 ? Math.sin((1 - stab) * Math.PI) : 0;
+  drawKnife(ctx, b.x + dx * b.r * 0.78, b.y + dy * b.r * 0.78, Math.atan2(dy, dx), hot, ext);
+  void o;
+}
+function drawSlashes(ctx, list) {
+  for (const s of list) {
+    const p = 1 - s.life / s.max, ca = Math.cos(s.a), sa = Math.sin(s.a), half = s.len * (0.6 + 0.4 * Math.min(1, p * 4));
+    ctx.save();
+    ctx.globalAlpha = 1 - p; ctx.strokeStyle = s.color; ctx.lineCap = "round";
+    ctx.shadowColor = s.color; ctx.shadowBlur = 10;
+    ctx.lineWidth = 5 * (1 - p) + 1;
+    ctx.beginPath(); ctx.moveTo(s.x - ca * half, s.y - sa * half); ctx.lineTo(s.x + ca * half, s.y + sa * half); ctx.stroke();
+    ctx.restore();
+  }
 }
 
 function drawBeam(ctx, v, o, t) {
@@ -308,8 +466,27 @@ function drawProjectiles(ctx, proj) {
 export class FX {
   constructor() { this.reset(); }
   reset() {
-    this.parts = []; this.rings = []; this.texts = []; this.bolts = [];
+    this.parts = []; this.rings = []; this.texts = []; this.bolts = []; this.slashes = []; this.pending = [];
     this.trails = [[], []]; this.flash = [0, 0]; this.shake = 0; this.banner = null; this.t = 0; this.fever = 0;
+    this.hurtFace = [0, 0]; this.ultFace = [0, 0]; this.stabAnim = [0, 0]; this.dim = 0;
+  }
+  slash(x, y, a, len, color) { this.slashes.push({ x, y, a, len, color, life: 0.22, max: 0.22 }); }
+  fireworks(x, y) {
+    this.ring(x, y, 10, 150, 0.28, "#ffe7a8", 0, true);
+    this.ring(x, y, 20, 175, 0.45, "#ff9a3c", 7);
+    this.burst(x, y, "#ff7a2a", 22, 420, 4);
+    const colors = ["#ffd25a", "#ff4b2b", "#5fd0ff", "#ff6bd0", "#7dff9a", "#ffffff", "#c48bff"];
+    const pick = () => colors[Math.floor(Math.random() * colors.length)];
+    const shells = [[0, 0, 0, 60], [rand(-70, -30), rand(-80, -40), 0.16, 48], [rand(30, 70), rand(-70, -30), 0.3, 48], [rand(-40, 40), rand(-110, -70), 0.46, 54], [rand(-60, 60), rand(-20, 30), 0.6, 40]];
+    for (const [dx, dy, delay, n] of shells) this.pending.push({ t: delay, x: x + dx, y: y + dy, color: pick(), color2: pick(), n });
+  }
+  shell(s) {
+    const spd = rand(250, 340);
+    for (let k = 0; k < s.n; k++) {
+      const a = (k / s.n) * TAU + rand(-0.06, 0.06), sp = spd * rand(0.82, 1.04), life = rand(0.8, 1.25);
+      this.parts.push({ x: s.x, y: s.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life, max: life, color: k % 3 ? s.color : s.color2, size: rand(2.8, 4.4), g: 200, drag: 0.982, twinkle: true });
+    }
+    this.ring(s.x, s.y, 4, 46, 0.28, "#ffffff", 0, true);
   }
   burst(x, y, color, n, spd, size, up = 0) {
     for (let i = 0; i < n; i++) {
@@ -343,6 +520,7 @@ export class FX {
           break;
         case "hit": {
           const t = B[e.i], src = FIGHTERS[B[e.src].type];
+          if (FIGHTERS[t.type].face) this.hurtFace[e.i] = 0.45;
           this.text(t.x + rand(-10, 10), t.y - t.r - 6, "-" + e.dmg, src.ink);
           this.burst(t.x, t.y, FIGHTERS[t.type].body, e.kind === "burn" || e.kind === "drain" ? 4 : 10, 240, 3);
           this.flash[e.i] = 0.12;
@@ -395,6 +573,43 @@ export class FX {
           else if (e.kind === "blaze") { this.ring(b.x, b.y, b.r, b.r + 30, 0.35, "#ff9a3c", 5); this.burst(b.x, b.y, "#ffb347", 10, 180, 3, 60); }
           else if (e.kind === "magnet") this.ring(b.x, b.y, b.r + 60, b.r, 0.4, "#ffb3c0", 4);
           else if (e.kind === "bomb") this.burst(e.x, e.y, "#8d96ad", 5, 90, 3);
+          else if (e.kind === "yosai") this.burst(b.x, b.y, "#ffc7a8", 8, 160, 2.2);
+          else if (e.kind === "yosaiUlt") {
+            this.show("ไฟอันติ!", f.th, "#ff8a3d", 1.7);
+            this.ring(b.x, b.y, b.r, b.r + 64, 0.5, "#ff7a2a", 6);
+            this.burst(b.x, b.y, "#ffb347", 24, 260, 3.5, 80);
+            this.burst(b.x, b.y, "#ff4b2b", 14, 200, 3);
+            if (!reduceMotion) this.shake = Math.max(this.shake, 6);
+          }
+          break;
+        }
+        case "ultDash":
+          this.ring(e.x, e.y, 20, 84, 0.3, "#ffb347", 5);
+          this.burst(e.x, e.y, "#ff7a2a", 16, 240, 3.5);
+          break;
+        case "latch":
+          this.ring(e.x, e.y, 4, e.ult ? 48 : 30, 0.25, e.ult ? "#ffb347" : "#ffffff", 4);
+          this.burst(e.x, e.y, e.ult ? "#ffb347" : "#ffffff", 8, 180, 2.4);
+          break;
+        case "stab": {
+          this.stabAnim[e.i] = 1;
+          this.burst(e.x, e.y, e.ult ? "#ffcf5a" : "#ffffff", e.ult ? 10 : 7, e.ult ? 260 : 200, 2.6);
+          this.burst(e.x, e.y, e.ult ? "#ff5a1f" : "#ff4b5e", 4, 160, 2.2);
+          this.slash(e.x, e.y, rand(0, TAU), e.ult ? 30 : 22, e.ult ? "#ffd27a" : "#ffffff");
+          if (e.ult && !reduceMotion) this.shake = Math.max(this.shake, 4);
+          break;
+        }
+        case "release": this.burst(e.x, e.y, "#ffffff", 5, 140, 2); break;
+        case "fireworks":
+          this.fireworks(e.x, e.y);
+          this.ultFace[e.i] = 0.9;
+          this.text(e.x, e.y - 56, "บึ้ม!", "#ffd25a", true, true);
+          if (!reduceMotion) this.shake = Math.max(this.shake, 16);
+          break;
+        case "ultReady": {
+          const b = B[e.i];
+          this.ring(b.x, b.y, b.r, b.r + 32, 0.45, "#ffb347", 4);
+          this.text(b.x, b.y - b.r - 26, "อันติพร้อม!", "#ffcf5a", false, true);
           break;
         }
         case "ko": {
@@ -414,7 +629,18 @@ export class FX {
 
   update(dt, S) {
     this.t += dt;
-    for (const p of this.parts) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.96; p.vy *= 0.96; p.life -= dt; }
+    for (const p of this.parts) {
+      if (p.g) p.vy += p.g * dt;
+      const dr = p.drag || 0.96;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= dr; p.vy *= dr; p.life -= dt;
+    }
+    for (const s of this.pending) { s.t -= dt; if (s.t <= 0) this.shell(s); }
+    this.pending = this.pending.filter(s => s.t > 0);
+    for (const s of this.slashes) s.life -= dt;
+    this.slashes = this.slashes.filter(s => s.life > 0);
+    this.hurtFace = this.hurtFace.map(v => Math.max(0, v - dt));
+    this.ultFace = this.ultFace.map(v => Math.max(0, v - dt));
+    this.stabAnim = this.stabAnim.map(v => Math.max(0, v - dt / 0.12));
     this.parts = this.parts.filter(p => p.life > 0);
     for (const r of this.rings) r.life -= dt;
     this.rings = this.rings.filter(r => r.life > 0);
@@ -426,11 +652,17 @@ export class FX {
     this.shake = Math.max(0, this.shake - dt * 40);
     if (this.banner) { this.banner.life -= dt; if (this.banner.life <= 0) this.banner = null; }
     this.fever = S && S.fever ? Math.min(1, this.fever + dt * 2) : Math.max(0, this.fever - dt * 2);
+    let dimT = 0;
+    if (S) for (const b of S.balls) if (b.alive && b.type === "yosai") dimT = Math.max(dimT, b.ph === PH.IGNITE ? 0.5 : b.ph >= PH.DASH ? 0.32 : 0);
+    this.dim += (dimT - this.dim) * Math.min(1, dt * 6);
     if (!S) return;
     S.balls.forEach((b, i) => {
       for (const p of this.trails[i]) p.life -= dt;
       this.trails[i] = this.trails[i].filter(p => p.life > 0);
       if (b.alive && b.type === "volt" && b.act > 0) this.trails[i].push({ x: b.x, y: b.y, life: 0.22 });
+      if (b.alive && b.type === "yosai" && (b.ph === PH.LUNGE || b.ph === PH.DASH)) this.trails[i].push({ x: b.x, y: b.y, life: 0.22, face: b.ph === PH.DASH ? "ult" : "idle" });
+      if (b.alive && b.type === "yosai" && b.ph === PH.IDLE && b.ult >= 100 && Math.random() < dt * 12) this.parts.push({ x: b.x + rand(-24, 24), y: b.y + rand(-10, 20), vx: rand(-15, 15), vy: -rand(50, 100), life: 0.6, max: 0.6, color: Math.random() < 0.5 ? "#ffb347" : "#ff5a1f", size: rand(1.8, 3) });
+      if (b.alive && b.type === "yosai" && b.ph >= PH.IGNITE && Math.random() < dt * 40) this.parts.push({ x: b.x + rand(-30, 30), y: b.y + rand(-30, 30), vx: rand(-30, 30), vy: -rand(80, 160), life: 0.5, max: 0.5, color: Math.random() < 0.5 ? "#ffd25a" : "#ff5a1f", size: rand(2, 3.4) });
       const o = S.balls[1 - i];
       if (b.alive && b.type === "vampire" && b.act > 0 && o.alive && Math.random() < dt * 30) {
         const s = Math.random();
@@ -447,6 +679,7 @@ export class FX {
 export function drawWorld(ctx, S, fx, opts = {}) {
   const t = fx.t;
   drawArena(ctx, fx.fever);
+  if (fx.dim > 0.01) { ctx.fillStyle = `rgba(6,3,12,${fx.dim})`; ctx.fillRect(LO, LO, HI - LO, HI - LO); }
   drawFires(ctx, S.fires, t);
   drawBombs(ctx, S.bombs, t);
   const B = S.balls;
@@ -460,24 +693,33 @@ export function drawWorld(ctx, S, fx, opts = {}) {
   B.forEach((b, i) => {
     const f = FIGHTERS[b.type];
     for (const p of fx.trails[i]) {
-      ctx.globalAlpha = (p.life / 0.22) * 0.3; ctx.fillStyle = f.body;
-      circle(ctx, p.x, p.y, b.r * 0.85); ctx.fill();
+      const a = (p.life / 0.22) * 0.3;
+      if (p.face) { ctx.globalAlpha = a * 1.1; drawBallBody(ctx, b.type, p.x, p.y, b.r * 0.9, { face: p.face }); }
+      else { ctx.globalAlpha = a; ctx.fillStyle = f.body; circle(ctx, p.x, p.y, b.r * 0.85); ctx.fill(); }
     }
     ctx.globalAlpha = 1;
   });
   B.forEach((b, i) => {
     if (!b.alive) return;
     const f = FIGHTERS[b.type];
+    const ultOn = b.type === "yosai" && b.ph >= PH.IGNITE;
+    if (ultOn) { drawUltAura(ctx, b, t); const [sp, ang] = wingState(b); drawWings(ctx, b, t, sp, ang); }
+    else if (b.type === "yosai" && b.ph === PH.IDLE && b.ult >= 100) drawUltReady(ctx, b, t);
     if (b.type === "blade" && b.act > 0) drawBlades(ctx, b);
     const ready = 1 - clamp(b.cd, 0, f.cd) / f.cd;
     drawBallBody(ctx, b.type, b.x, b.y, b.r, {
-      glow: (b.type === "volt" && b.act > 0) || (b.type === "magnet" && b.act > 0) ? 24 : 0,
+      glow: (b.type === "volt" && b.act > 0) || (b.type === "magnet" && b.act > 0) ? 24 : ultOn ? 30 : 0,
+      glowColor: ultOn ? "#ff6a2a" : undefined, hot: ultOn,
+      face: f.face ? (ultOn || fx.ultFace[i] > 0 ? "ult" : fx.hurtFace[i] > 0 ? "hurt" : "idle") : undefined,
       spin: b.spinA * 0.4, spark: b.type === "bomb" && ready > 0.8 && Math.sin(t * 40) > 0
     });
     if (b.chill > 0) drawChill(ctx, b, t);
     if (b.burn > 0) drawBurn(ctx, b);
     if (b.type === "shield" && b.act > 0) drawShield(ctx, b, t);
-    if (fx.flash[i] > 0) { ctx.globalAlpha = fx.flash[i] / 0.12 * 0.7; ctx.fillStyle = "#ffffff"; circle(ctx, b.x, b.y, b.r); ctx.fill(); ctx.globalAlpha = 1; }
+    if (fx.flash[i] > 0) {
+      ctx.globalAlpha = fx.flash[i] / 0.12 * (f.face ? 0.35 : 0.7); ctx.fillStyle = f.face ? "#ff3b3b" : "#ffffff";
+      circle(ctx, b.x, b.y, b.r); ctx.fill(); ctx.globalAlpha = 1;
+    }
     // cooldown ring
     ctx.lineCap = "round"; ctx.lineWidth = 3.5;
     ctx.strokeStyle = "rgba(255,255,255,0.12)"; circle(ctx, b.x, b.y, b.r + 7); ctx.stroke();
@@ -489,13 +731,24 @@ export function drawWorld(ctx, S, fx, opts = {}) {
       ctx.fillStyle = i === 0 ? "#3fa9ff" : "#ff5a6e";
       ctx.beginPath(); ctx.moveTo(b.x - 7, b.y - b.r - 20); ctx.lineTo(b.x + 7, b.y - b.r - 20); ctx.lineTo(b.x, b.y - b.r - 12); ctx.closePath(); ctx.fill();
     }
-    // HP number
-    ctx.font = `30px ${DISPLAY}`;
+    // HP number (photo balls get a small badge under the face so the face stays visible)
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     const txt = String(Math.ceil(b.hp));
-    ctx.lineJoin = "round"; ctx.lineWidth = 6; ctx.strokeStyle = "rgba(8,14,30,0.9)";
-    ctx.strokeText(txt, b.x, b.y + 1); ctx.fillStyle = "#ffffff"; ctx.fillText(txt, b.x, b.y + 1);
+    if (f.face) {
+      const bw = 42, bh = 22, bx = b.x - bw / 2, by = b.y + b.r - 13;
+      rrect(ctx, bx, by, bw, bh, 11); ctx.fillStyle = "rgba(8,14,30,0.9)"; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = f.ink; ctx.stroke();
+      ctx.font = `19px ${DISPLAY}`; ctx.fillStyle = "#ffffff"; ctx.fillText(txt, b.x, by + bh / 2 + 1);
+    } else {
+      ctx.font = `30px ${DISPLAY}`;
+      ctx.lineJoin = "round"; ctx.lineWidth = 6; ctx.strokeStyle = "rgba(8,14,30,0.9)";
+      ctx.strokeText(txt, b.x, b.y + 1); ctx.fillStyle = "#ffffff"; ctx.fillText(txt, b.x, b.y + 1);
+    }
   });
+  B.forEach((b, i) => {
+    if (b.alive && b.type === "yosai" && b.ph !== PH.IDLE && b.ph !== PH.IGNITE) drawYosaiKnife(ctx, b, B[1 - i], fx.stabAnim[i]);
+  });
+  drawSlashes(ctx, fx.slashes);
   // particles, rings, bolts, floating text
   for (const r of fx.rings) {
     const p = 1 - r.life / r.max, e = 1 - Math.pow(1 - p, 3), rad = r.r0 + (r.r1 - r.r0) * e;
@@ -503,6 +756,7 @@ export function drawWorld(ctx, S, fx, opts = {}) {
     else { ctx.globalAlpha = 1 - p; ctx.strokeStyle = r.color; ctx.lineWidth = r.width * (1 - p * 0.6); circle(ctx, r.x, r.y, Math.max(0, rad)); ctx.stroke(); }
   }
   for (const p of fx.parts) {
+    if (p.twinkle && p.life < p.max * 0.5 && Math.random() < 0.35) continue;
     ctx.globalAlpha = p.life / p.max; ctx.fillStyle = p.color;
     circle(ctx, p.x, p.y, p.size * (0.4 + 0.6 * p.life / p.max)); ctx.fill();
   }
@@ -659,7 +913,7 @@ export function drawCover(ctx, w, h, mode = "cover") {
   impact(w / 2, cy, heroR * 0.55);
   logo(w / 2, logoY, logoSize);
   // roster row
-  const rest = ORDER.filter(t => t !== "volt" && t !== "blade");
+  const rest = ORDER.filter(t => t !== "volt" && t !== "blade" && !FIGHTERS[t].special);
   const rowY = portraitMode ? h * 0.72 : h * 0.86;
   const rr = portraitMode ? w * 0.052 : h * 0.062;
   const span = portraitMode ? w * 0.84 : w * 0.62;

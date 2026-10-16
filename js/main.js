@@ -1,7 +1,7 @@
 // App shell: screens, character select, battle loop, online lobby, settings, install.
 import { FIGHTERS, ORDER } from "./fighters.js";
-import { createMatch, step, newSeed, DT, L, snapshot, restore, hashState, timeOf } from "./sim.js";
-import { FX, drawWorld, portraitURL, Showcase } from "./draw.js";
+import { createMatch, step, newSeed, DT, L, snapshot, restore, hashState, timeOf, busy as skillBusy, PH } from "./sim.js";
+import { FX, drawWorld, portraitURL, Showcase, loadFaces } from "./draw.js";
 import * as audio from "./audio.js";
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -23,10 +23,16 @@ let wins = store.get("bvb-wins", {});
 if (!wins || typeof wins !== "object") wins = {};
 audio.setPrefs({ sfx: settings.sfx, music: settings.music });
 
+for (const t of ORDER) for (const [k, url] of Object.entries(FIGHTERS[t].voice || {})) audio.registerSample(`${t}-${k}`, url);
+if (document.fonts) {
+  document.fonts.load('30px "Lilita One"').catch(() => {});
+  document.fonts.load('600 20px "Noto Sans Lao"', "ໂຍສາຍຊອຍ").catch(() => {});
+}
+await loadFaces();
 const IMG = {};
 for (const t of ORDER) IMG[t] = portraitURL(t, 128);
 const setC = (el, type) => el.style.setProperty("--c", FIGHTERS[type].ink);
-if (document.fonts) document.fonts.load('30px "Lilita One"').catch(() => {});
+const introVoice = t => { if (FIGHTERS[t].voice) audio.playSample(`${t}-intro`, { interrupt: true }); };
 
 // ---------------------------------------------------------------- toast + modal
 let toastTimer = 0;
@@ -115,11 +121,17 @@ $("#btn-settings").addEventListener("click", () => show("settings"));
 function makeTile(type, onPick) {
   const f = FIGHTERS[type];
   const b = document.createElement("button");
-  b.type = "button"; b.className = "tile"; b.dataset.type = type; setC(b, type);
+  b.type = "button"; b.className = "tile" + (f.special ? " wide" : ""); b.dataset.type = type; setC(b, type);
   const img = document.createElement("img"); img.alt = ""; img.src = IMG[type];
   const th = document.createElement("span"); th.className = "t-th"; th.textContent = f.th;
   const en = document.createElement("span"); en.className = "t-en"; en.textContent = f.en;
-  b.append(img, th, en);
+  if (f.special) {
+    const txt = document.createElement("span"); txt.className = "t-txt";
+    const tags = document.createElement("span"); tags.className = "t-tags";
+    tags.append(chip("ตัวละครพิเศษ", "chip new"), chip(f.ult ? `มี${f.ult}` : f.role, "chip role"));
+    txt.append(th, en, tags);
+    b.append(img, txt);
+  } else b.append(img, th, en);
   b.setAttribute("aria-label", `${f.th} ${f.en}`);
   b.addEventListener("click", () => onPick(type));
   return b;
@@ -131,6 +143,15 @@ function statChips(type) {
   box.append(chip(f.role, "chip role"), chip(`คูลดาวน์ ${f.cd} วิ`), chip(`ดาเมจ ${f.dmg}`), chip(`ชนะ ${wins[type] || 0}`));
   return box;
 }
+function ultBlock(type) {
+  const f = FIGHTERS[type];
+  if (!f.ult) return null;
+  const box = document.createElement("div"); box.className = "ult-line";
+  const h = document.createElement("b"); h.textContent = `อันติ: ${f.ult}`;
+  const p = document.createElement("span"); p.textContent = `${f.ultDesc} (ดาเมจ ${f.ultDmg})`;
+  box.append(h, p);
+  return box;
+}
 
 // ---------------------------------------------------------------- character select
 const sel = { left: null, right: null, side: "left", focus: "archer" };
@@ -140,6 +161,7 @@ for (const t of ORDER) selTiles.append(makeTile(t, pickSelect));
 function pickSelect(t) {
   sel[sel.side] = t; sel.focus = t;
   audio.sfx("select");
+  introVoice(t);
   if (sel.side === "left" && !sel.right) sel.side = "right";
   else if (sel.side === "right" && !sel.left) sel.side = "left";
   renderSelect();
@@ -171,6 +193,7 @@ function renderInfo(el, t) {
   const sk = document.createElement("div"); sk.className = "i-skill"; sk.textContent = `สกิล: ${f.skill}`;
   const p = document.createElement("p"); p.textContent = f.desc;
   el.append(img, top, sk, statChips(t), p);
+  const u = ultBlock(t); if (u) el.append(u);
 }
 
 function renderSelect() {
@@ -216,7 +239,7 @@ const battle = {
 
 const hud = ["#hudL", "#hudR"].map(s => {
   const el = $(s);
-  return { el, img: $("img", el), en: $(".en", el), who: $(".who", el), bar: $(".bar i", el), hpn: $(".hpn", el), skt: $(".skt", el), cd: $(".cd i", el), chips: $(".chips", el), last: {} };
+  return { el, img: $("img", el), en: $(".en", el), who: $(".who", el), bar: $(".bar i", el), hpn: $(".hpn", el), skt: $(".skt", el), cd: $(".cd i", el), ult: $(".ult", el), ultI: $(".ult i", el), chips: $(".chips", el), last: {} };
 });
 
 function startLocal(left, right) {
@@ -237,14 +260,18 @@ function startBattle({ left, right, seed, gravity, online, names, round = 0 }) {
   battle.S.balls.forEach((b, i) => {
     const h = hud[i], f = FIGHTERS[b.type];
     h.el.style.setProperty("--c", f.ink);
-    h.img.src = IMG[b.type]; h.en.textContent = f.en;
+    h.img.src = IMG[b.type]; h.en.textContent = f.special ? f.th : f.en;
+    h.en.classList.toggle("lao", !!f.special);
+    h.ult.hidden = !f.ult;
     const mine = online && room && ((room.role === "host") === (i === 0));
-    h.who.textContent = online ? battle.names[i] + (mine ? " (คุณ)" : "") : f.th;
+    h.who.textContent = online ? battle.names[i] + (mine ? " (คุณ)" : "") : (f.special ? f.en : f.th);
     h.last = {};
   });
   $("#pause-ov").hidden = true; $("#result-ov").hidden = true;
   $("#b-speed").hidden = online; $("#b-online").hidden = !online;
   if (online && room) $("#b-online").textContent = `ออนไลน์ · ห้อง ${room.code}`;
+  const voiced = [left, right].find(t => FIGHTERS[t].voice);
+  if (voiced) setTimeout(() => { if (battle.S && current === "battle") introVoice(voiced); }, 250);
   $("#b-pause").setAttribute("aria-label", online ? "ออกจากห้อง" : "หยุดเกม");
   syncSpeedSeg();
   syncSoundBtn();
@@ -320,7 +347,8 @@ function fillResult() {
   const ov = $("#result-ov");
   ov.style.setProperty("--c", f.ink);
   $("#r-orb").src = IMG[w.type];
-  $("#r-name").textContent = f.en;
+  $("#r-name").textContent = f.special ? f.th : f.en;
+  $("#r-name").classList.toggle("lao", !!f.special);
   const t = timeOf(S) > 0 ? (S.koF > 0 ? S.koF * DT : timeOf(S)) : 0;
   if (battle.online && room) {
     const iWon = (room.role === "host") === (win === 0);
@@ -328,7 +356,7 @@ function fillResult() {
     $("#r-sub").textContent = `${battle.names[win]} ชนะ · สกอร์ ${room.score[0]} : ${room.score[1]}`;
   } else {
     $("#r-kicker").textContent = S.timeout ? "หมดเวลา · ผู้ชนะ" : "ผู้ชนะ";
-    $("#r-sub").textContent = `${f.th} ชนะ · เหลือ HP ${Math.ceil(w.hp)} · เวลา ${fmtTime(t)}`;
+    $("#r-sub").textContent = `${f.special ? "" : f.th + " "}ชนะ · เหลือ HP ${Math.ceil(w.hp)} · เวลา ${fmtTime(t)}`;
   }
   $("#r-local").hidden = battle.online; $("#r-online").hidden = !battle.online;
 }
@@ -349,9 +377,13 @@ function updateHud() {
     const ready = b.alive ? 1 - Math.min(f.cd, Math.max(0, b.cd)) / f.cd : 0;
     const w = (ready * 100).toFixed(0) + "%";
     if (w !== h.last.cd) { h.cd.style.width = w; h.last.cd = w; }
-    const txt = !b.alive ? "แพ้" : b.act > 0 ? f.skill + "!" : `${f.skill} ${Math.max(0, b.cd).toFixed(1)} วิ`;
+    const txt = !b.alive ? "แพ้" : b.ph >= PH.IGNITE ? `${f.ult}!` : skillBusy(b) ? f.skill + "!" : `${f.skill} ${Math.max(0, b.cd).toFixed(1)} วิ`;
     if (txt !== h.last.txt) { h.skt.textContent = txt; h.last.txt = txt; }
-    const st = [b.chill > 0 && "หนาว", b.burn > 0 && "ติดไฟ", b.type === "shield" && b.act > 0 && "โล่"].filter(Boolean).join(",");
+    if (f.ult) {
+      const u = Math.round(b.ult);
+      if (u !== h.last.ult) { h.ultI.style.width = u + "%"; h.ult.classList.toggle("full", u >= 100); h.last.ult = u; }
+    }
+    const st = [b.chill > 0 && "หนาว", b.burn > 0 && "ติดไฟ", b.type === "shield" && b.act > 0 && "โล่", f.ult && b.ult >= 100 && b.ph === PH.IDLE && "อันติพร้อม"].filter(Boolean).join(",");
     if (st !== h.last.st) { h.chips.textContent = ""; if (st) st.split(",").forEach(c => h.chips.append(chip(c, ""))); h.last.st = st; }
   });
   const clock = fmtTime(S.over && S.koF > 0 ? S.koF * DT : timeOf(S));
@@ -446,7 +478,10 @@ enter.roster = () => {
     names.append(en, th); top.append(img, names);
     const sk = document.createElement("div"); sk.className = "sk"; sk.textContent = `สกิล: ${f.skill}`;
     const p = document.createElement("p"); p.textContent = f.desc;
-    c.append(top, sk, p, statChips(t));
+    c.append(top, sk, p);
+    const u = ultBlock(t); if (u) c.append(u);
+    c.append(statChips(t));
+    if (f.special) c.classList.add("special");
     box.append(c);
   }
 };
@@ -568,6 +603,7 @@ for (const t of ORDER) lbTiles.append(makeTile(t, t2 => {
   room.setPick(t2);
   if (room.me.ready) room.setReady(false);
   audio.sfx("select");
+  introVoice(t2);
   renderLobby();
 }));
 

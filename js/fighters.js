@@ -1,6 +1,16 @@
 // Fighter roster: names, colours and the text shown in menus.
 // Numbers that drive the fight live in sim.js (P); keep the text here in step with them.
 export const FIGHTERS = {
+  yosai: {
+    en: "YOSAISOY", th: "ໂຍສາຍຊອຍ", role: "นักฆ่ามีด", special: true,
+    body: "#3a1410", edge: "#1a0806", ink: "#ff5a36",
+    mass: 1.05, cd: 3.9, skill: "เกาะแทง", dmg: "4 x 3",
+    ult: "ไฟอันติ", ultDmg: "4 x 5 + พลุ 12",
+    desc: "พุ่งเข้าไปเกาะศัตรูแล้วแทงมีดรัว 3 ครั้งก่อนปล่อย แทงโดนหรือโดนตีจะชาร์จไฟอันติ",
+    ultDesc: "เปิดพลังเปลวไฟ กางปีกยมทูต พุ่งเข้าไปแทง 5 ครั้งแล้วระเบิดเป็นพลุไฟ",
+    face: { idle: "img/fighters/yosai-idle.jpg", hurt: "img/fighters/yosai-hurt.jpg", ult: "img/fighters/yosai-ult.jpg" },
+    voice: { intro: "sound/yosai-intro.mp3", hurt: "sound/yosai-hurt.mp3", ult: "sound/yosai-ult.mp3" }
+  },
   archer: {
     en: "ARCHER", th: "ธนู", role: "ยิงไกล",
     body: "#3fc6ff", edge: "#0a5d8a", ink: "#5fd0ff",
@@ -34,7 +44,7 @@ export const FIGHTERS = {
   vampire: {
     en: "VAMPIRE", th: "แวมไพร์", role: "ดูดเลือด",
     body: "#8e44ec", edge: "#3a1270", ink: "#c48bff",
-    mass: 1.0, cd: 4.2, skill: "ดูดเลือด", dmg: "10 + ฮีล 5",
+    mass: 1.0, cd: 4.0, skill: "ดูดเลือด", dmg: "10 + ฮีล 5",
     desc: "ยิงลำแสงดูดเลือดใส่ศัตรูที่อยู่ใกล้ ดูด HP มาเติมให้ตัวเอง"
   },
   frost: {
@@ -57,4 +67,4 @@ export const FIGHTERS = {
   }
 };
 
-export const ORDER = ["archer", "bomb", "blade", "volt", "shield", "vampire", "frost", "blaze", "magnet"];
+export const ORDER = ["yosai", "archer", "bomb", "blade", "volt", "shield", "vampire", "frost", "blaze", "magnet"];

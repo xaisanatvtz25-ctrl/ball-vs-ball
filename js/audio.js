@@ -1,5 +1,5 @@
 // All sound is synthesised with WebAudio, so there are no audio files to load.
-let ctx = null, master, sfxBus, musicBus, noiseBuf;
+let ctx = null, master, sfxBus, musicBus, voiceBus, noiseBuf;
 const last = {};
 const state = { sfx: true, music: true, musicOn: false, intense: false };
 
@@ -14,6 +14,7 @@ function init() {
   comp.connect(master);
   sfxBus = ctx.createGain(); sfxBus.gain.value = 0.8; sfxBus.connect(comp);
   musicBus = ctx.createGain(); musicBus.gain.value = 0.0; musicBus.connect(comp);
+  voiceBus = ctx.createGain(); voiceBus.gain.value = 1.0; voiceBus.connect(comp);
   noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
   const d = noiseBuf.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -24,6 +25,51 @@ export function unlock() {
   if (!init()) return;
   if (ctx.state === "suspended") ctx.resume().catch(() => {});
   if (state.music && !state.musicOn) startMusic();
+  preloadSamples();
+}
+
+// ---------- recorded voice clips ----------
+const samples = {}, playing = {};
+export function registerSample(name, url) { if (!samples[name]) samples[name] = { url, buf: null, loading: null }; }
+function loadSample(name) {
+  const smp = samples[name];
+  if (!smp || smp.buf || smp.loading || !ctx) return;
+  smp.loading = fetch(smp.url)
+    .then(r => (r.ok ? r.arrayBuffer() : Promise.reject(new Error("http " + r.status))))
+    .then(ab => new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej)))
+    .then(buf => { smp.buf = buf; })
+    .catch(() => { smp.loading = null; });
+}
+export function preloadSamples() { for (const n in samples) loadSample(n); }
+export function playSample(name, { interrupt = false, gain = 1 } = {}) {
+  if (!ctx || !state.sfx || ctx.state !== "running") return false;
+  const smp = samples[name];
+  if (!smp) return false;
+  if (!smp.buf) { loadSample(name); return false; }
+  if (playing[name]) {
+    if (!interrupt) return false;
+    try { playing[name].stop(); } catch (e) { /* already stopped */ }
+  }
+  const src = ctx.createBufferSource(); src.buffer = smp.buf;
+  const g = ctx.createGain(); g.gain.value = gain;
+  src.connect(g).connect(voiceBus);
+  src.onended = () => { if (playing[name] === src) delete playing[name]; };
+  src.start();
+  playing[name] = src;
+  duckMusic(smp.buf.duration);
+  return true;
+}
+export function stopSample(name) {
+  if (!playing[name]) return;
+  try { playing[name].stop(); } catch (e) { /* already stopped */ }
+  delete playing[name];
+}
+function duckMusic(dur) {
+  if (!state.musicOn) return;
+  const t = ctx.currentTime;
+  musicBus.gain.cancelScheduledValues(t);
+  musicBus.gain.setTargetAtTime(0.1, t, 0.04);
+  musicBus.gain.setTargetAtTime(0.32, t + dur, 0.35);
 }
 
 export function setPrefs({ sfx, music }) {
@@ -143,6 +189,28 @@ export function sfx(name, x = 0.5) {
     case "fever":
       [440, 554, 659, 880].forEach((f, i) => tone({ type: "sawtooth", f, t: t + i * 0.07, d: 0.16, v: 0.06 })); break;
     case "tap": if (!gate("tap", 0.03)) return; tone({ type: "triangle", f: 880, f2: 660, t, d: 0.05, v: 0.08 }); break;
+    case "lunge":
+      noise({ t, d: 0.2, v: 0.22, type: "bandpass", f: 500, f2: 2600, q: 1.4 }); tone({ type: "sine", f: 140, f2: 70, t, d: 0.12, v: 0.25 }); break;
+    case "latch":
+      tone({ type: "sine", f: 190, f2: 80, t, d: 0.12, v: 0.4 }); noise({ t, d: 0.04, v: 0.2, f: 1500 }); break;
+    case "stab":
+      noise({ t, d: 0.06, v: 0.32, type: "bandpass", f: 1900, q: 1.1 }); tone({ type: "triangle", f: 340, f2: 110, t, d: 0.07, v: 0.22 });
+      tone({ type: "square", f: 2400, t, d: 0.02, v: 0.05 }); break;
+    case "ustab":
+      noise({ t, d: 0.07, v: 0.32, type: "bandpass", f: 1700, q: 1.1 }); tone({ type: "triangle", f: 300, f2: 90, t, d: 0.08, v: 0.24 });
+      noise({ t, d: 0.16, v: 0.2, f: 2600, f2: 500 }); break;
+    case "ultDash":
+      noise({ t, d: 0.32, v: 0.3, type: "bandpass", f: 400, f2: 3200, q: 1.2 }); tone({ type: "sawtooth", f: 180, f2: 760, t, d: 0.26, v: 0.07 }); break;
+    case "fireworks": {
+      noise({ t, a: 0.004, d: 0.8, v: 0.6, f: 2400, f2: 90 }); tone({ type: "sine", f: 110, f2: 34, t, d: 0.7, v: 0.6 });
+      for (let k = 0; k < 18; k++) {
+        const at = t + 0.12 + Math.random() * 1.0;
+        noise({ t: at, a: 0.001, d: 0.025 + Math.random() * 0.03, v: 0.12 + Math.random() * 0.12, type: "highpass", f: 2500 + Math.random() * 3000 });
+      }
+      for (const [dl, f] of [[0.16, 900], [0.3, 1100], [0.46, 800], [0.6, 1000]]) tone({ type: "sine", f, f2: f * 0.5, t: t + dl, d: 0.18, v: 0.05 });
+      break;
+    }
+    case "ultReady": [660, 880, 1320].forEach((f, i) => tone({ type: "triangle", f, t: t + i * 0.06, d: 0.16, v: 0.09 })); break;
     case "select": tone({ type: "triangle", f: 660, f2: 990, t, d: 0.09, v: 0.1 }); break;
     case "join": [660, 880].forEach((f, i) => tone({ type: "sine", f, t: t + i * 0.09, d: 0.12, v: 0.1 })); break;
   }
@@ -156,7 +224,10 @@ export function playEvents(S, events) {
       case "wall": sfx("wall", Math.min(1, e.sp / 900)); break;
       case "clash": sfx("clash"); break;
       case "hit":
-        if (e.kind === "burn" || e.kind === "drain") sfx(e.kind === "burn" ? "burn" : "drain");
+        if (S.balls[e.i] && S.balls[e.i].type === "yosai" && !S.over && !playing["yosai-ult"] && gate("yosaiHurt", 3.2)) playSample("yosai-hurt");
+        if (e.kind === "stab" || e.kind === "ustab") { /* the stab event covers it */ }
+        else if (e.kind === "fireworks") { /* the fireworks event covers it */ }
+        else if (e.kind === "burn" || e.kind === "drain") sfx(e.kind === "burn" ? "burn" : "drain");
         else if (e.kind === "blade") sfx("slash");
         else if (e.kind === "dash") sfx("zap");
         else if (e.kind === "magnet") sfx("clank");
@@ -174,10 +245,21 @@ export function playEvents(S, events) {
       case "ko": sfx("ko"); break;
       case "fever": sfx("fever"); break;
       case "cast": {
-        const map = { archer: "arrow", bomb: "bombThrow", blade: "spin", volt: "dash", shield: "shieldUp", vampire: "beam", frost: "ice", blaze: "fire", magnet: "magnet" };
+        if (e.kind === "yosaiUlt") {
+          stopSample("yosai-hurt"); stopSample("yosai-intro");
+          playSample("yosai-ult", { interrupt: true });
+          sfx("fire");
+          break;
+        }
+        const map = { archer: "arrow", bomb: "bombThrow", blade: "spin", volt: "dash", shield: "shieldUp", vampire: "beam", frost: "ice", blaze: "fire", magnet: "magnet", yosai: "lunge" };
         sfx(map[e.kind]);
         break;
       }
+      case "latch": sfx("latch"); break;
+      case "stab": sfx(e.ult ? "ustab" : "stab"); break;
+      case "ultDash": sfx("ultDash"); break;
+      case "fireworks": sfx("fireworks"); break;
+      case "ultReady": sfx("ultReady"); break;
     }
   }
 }
