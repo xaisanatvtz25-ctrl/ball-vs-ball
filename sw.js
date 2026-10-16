@@ -1,6 +1,6 @@
 // Service worker: lets the game install as an app and open offline.
 // Network first (so updates arrive straight away), cached copy when offline.
-const CACHE = "bvb-v2.1.0";
+const CACHE = "bvb-v2.1.1";
 const CORE = [
   "./", "index.html", "manifest.webmanifest", "css/app.css",
   "js/main.js", "js/sim.js", "js/fighters.js", "js/draw.js", "js/audio.js", "js/net.js", "js/mqtt-lite.js",

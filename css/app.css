@@ -343,6 +343,8 @@ img { max-width: 100%; }
 .modal-body ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
 .modal-body b { color: var(--fg); }
 .modal-btns { display: flex; gap: 10px; }
+.apk-note { margin: 12px 0 0; font-size: 14px; color: var(--muted); }
+.row:has(> [data-apk][hidden]) { display: none; }
 .modal-btns > * { flex: 1; }
 .toast {
   position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 40;

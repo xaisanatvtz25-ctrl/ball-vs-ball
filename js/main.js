@@ -8,6 +8,9 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const params = new URLSearchParams(location.search);
 const DEBUG = params.has("debug");
+const IN_APP = /BallVsBallApp\//.test(navigator.userAgent);           // running inside the Android APK
+const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+const APK_URL = "https://github.com/xaisanatvtz25-ctrl/ball-vs-ball/releases/download/apk/ball-vs-ball.apk";
 const reduceMotion = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
 const cleanName = s => String(s || "").replace(/[\u0000-\u001f\u007f<>]/g, "").trim().slice(0, 12);
 const fmtTime = sec => { const t = Math.floor(sec); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`; };
@@ -506,17 +509,36 @@ $("#set-reset").addEventListener("click", () => modal({
 // ---------------------------------------------------------------- install (PWA)
 let deferredPrompt = null;
 const isStandalone = () => (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
-function updateInstall() { for (const b of $$("[data-install]")) b.hidden = isStandalone(); }
+function updateInstall() {
+  for (const b of $$("[data-install]")) b.hidden = isStandalone() || IN_APP;
+  for (const b of $$("[data-apk]")) b.hidden = IN_APP || IS_IOS;
+}
+function downloadApk() {
+  const a = document.createElement("a");
+  a.href = APK_URL; a.rel = "noopener";
+  document.body.append(a); a.click(); a.remove();
+  toast("กำลังดาวน์โหลด ball-vs-ball.apk");
+}
+for (const b of $$("[data-apk]")) b.addEventListener("click", downloadApk);
 addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferredPrompt = e; updateInstall(); });
 addEventListener("appinstalled", () => { deferredPrompt = null; updateInstall(); toast("ติดตั้งแอปแล้ว เปิดจากหน้าจอหลักได้เลย"); });
 function installHelp() {
+  const box = document.createElement("div");
   const ol = document.createElement("ol");
-  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
-  const steps = ios
+  const steps = IS_IOS
     ? ["เปิดหน้านี้ใน Safari", "กดปุ่มแชร์ (สี่เหลี่ยมมีลูกศรชี้ขึ้น)", "เลือก “เพิ่มไปยังหน้าจอโฮม”"]
     : ["เปิดหน้านี้ใน Google Chrome", "กดปุ่มเมนู ⋮ มุมขวาบน", "เลือก “ติดตั้งแอป” หรือ “เพิ่มลงในหน้าจอหลัก”"];
   for (const s of steps) { const li = document.createElement("li"); li.textContent = s; ol.append(li); }
-  modal({ title: "ติดตั้ง Ball vs Ball", body: ol, buttons: [{ label: "เข้าใจแล้ว", cls: "bigbtn gold wide" }] });
+  box.append(ol);
+  const buttons = [{ label: "เข้าใจแล้ว", cls: "bigbtn gold wide" }];
+  if (!IS_IOS) {
+    const p = document.createElement("p");
+    p.className = "apk-note";
+    p.textContent = "หรือดาวน์โหลดไฟล์ APK ไว้ติดตั้งหรือส่งให้เพื่อน (เฉพาะ Android)";
+    box.append(p);
+    buttons.unshift({ label: "ดาวน์โหลด APK", cls: "midbtn", onClick: downloadApk });
+  }
+  modal({ title: "ติดตั้ง Ball vs Ball", body: box, buttons });
 }
 for (const b of $$("[data-install]")) b.addEventListener("click", async () => {
   if (deferredPrompt) {
@@ -525,7 +547,7 @@ for (const b of $$("[data-install]")) b.addEventListener("click", async () => {
   } else installHelp();
 });
 updateInstall();
-if ("serviceWorker" in navigator && window.isSecureContext && !params.has("nosw")) {
+if ("serviceWorker" in navigator && window.isSecureContext && !params.has("nosw") && !IN_APP) {
   addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
 }
 

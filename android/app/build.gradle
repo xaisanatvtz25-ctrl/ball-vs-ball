@@ -1,0 +1,48 @@
+plugins {
+    id "com.android.application"
+}
+
+// Release signing comes from the CI (see .github/workflows/apk.yml).
+// Without BVB_KEYSTORE the release build falls back to the debug key.
+def keystorePath = System.getenv("BVB_KEYSTORE")
+
+android {
+    namespace "io.github.xaisanatvtz25.ballvsball"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "io.github.xaisanatvtz25.ballvsball"
+        minSdk 24
+        targetSdk 34
+        versionCode Integer.parseInt((project.findProperty("versionCode") ?: "1").toString())
+        versionName "2.1"
+    }
+
+    signingConfigs {
+        if (keystorePath) {
+            release {
+                storeFile file(keystorePath)
+                storePassword System.getenv("BVB_KEYSTORE_PASSWORD")
+                keyAlias "bvb"
+                keyPassword System.getenv("BVB_KEYSTORE_PASSWORD")
+                storeType "pkcs12"
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig keystorePath ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

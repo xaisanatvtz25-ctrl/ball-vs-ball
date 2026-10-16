@@ -1,0 +1,120 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "manifest.webmanifest"
+      - "css/**"
+      - "js/**"
+      - "fonts/**"
+      - "img/fighters/**"
+      - "icons/**"
+      - "sound/**"
+      - "android/**"
+      - ".github/workflows/apk.yml"
+  workflow_dispatch:
+  schedule:
+    # Weekly run that only touches the signing-key cache, so it never expires
+    # (unused caches are deleted after 7 days). Same key = updates install over the old app.
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore signing key
+        id: key
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.bvb-signing
+          key: bvb-signing-key-v1
+
+      - name: Create signing key (first run only)
+        if: steps.key.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.bvb-signing
+          PASS="$(openssl rand -hex 24)"
+          printf '%s' "$PASS" > ~/.bvb-signing/pass
+          keytool -genkeypair -noprompt -keystore ~/.bvb-signing/release.p12 -storetype PKCS12 \
+            -alias bvb -keyalg RSA -keysize 2048 -validity 10950 \
+            -storepass "$PASS" -keypass "$PASS" \
+            -dname "CN=Ball vs Ball, OU=Game, O=xaisanatvtz25-ctrl"
+
+      - name: Save signing key
+        if: steps.key.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.bvb-signing
+          key: bvb-signing-key-v1
+
+      - name: Keep-alive run ends here
+        if: github.event_name == 'schedule'
+        run: echo "Signing key cache refreshed."
+
+      - uses: actions/setup-java@v4
+        if: github.event_name != 'schedule'
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        if: github.event_name != 'schedule'
+        with:
+          gradle-version: "8.9"
+
+      - name: Copy game files into the app
+        if: github.event_name != 'schedule'
+        run: |
+          W=android/app/src/main/assets/www
+          rm -rf "$W"
+          mkdir -p "$W/img" "$W/icons"
+          cp index.html manifest.webmanifest "$W/"
+          cp -r css js fonts sound "$W/"
+          cp -r img/fighters "$W/img/"
+          cp icons/icon-192.png icons/apple-touch-icon.png "$W/icons/"
+          du -sh "$W"
+
+      - name: Build APK
+        if: github.event_name != 'schedule'
+        working-directory: android
+        run: |
+          export BVB_KEYSTORE="$HOME/.bvb-signing/release.p12"
+          export BVB_KEYSTORE_PASSWORD="$(cat "$HOME/.bvb-signing/pass")"
+          gradle assembleRelease --no-daemon --stacktrace -PversionCode=${{ github.run_number }}
+
+      - name: Check signature
+        if: github.event_name != 'schedule'
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          ls -l "$APK"
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          "$BT/apksigner" verify --verbose --print-certs "$APK" | grep -E "Verified|Signer #1 certificate (DN|SHA-256)"
+          cp "$APK" ball-vs-ball.apk
+
+      - name: Publish to the "apk" release
+        if: github.event_name != 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES="Ball vs Ball สำหรับ Android (build ${{ github.run_number }}, commit ${GITHUB_SHA::7})
+
+          ดาวน์โหลด: https://github.com/${{ github.repository }}/releases/download/apk/ball-vs-ball.apk
+
+          วิธีติดตั้ง: เปิดไฟล์ ball-vs-ball.apk บนมือถือ Android แล้วกดติดตั้ง ถ้าเครื่องถาม ให้อนุญาต \"ติดตั้งแอปที่ไม่รู้จัก\" สำหรับเบราว์เซอร์หรือแอปที่ใช้เปิดไฟล์"
+          if ! gh release view apk >/dev/null 2>&1; then
+            gh release create apk --title "Ball vs Ball (Android APK)" --notes "$NOTES" --latest
+          else
+            gh release edit apk --notes "$NOTES"
+          fi
+          gh release upload apk ball-vs-ball.apk --clobber
