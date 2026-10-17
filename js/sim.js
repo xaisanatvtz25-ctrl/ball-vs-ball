@@ -28,11 +28,11 @@ export const P = {
   magnet:  { dur: 1.5, pull: 2000, dmg: 13, knock: 380 },
   yosai: {
     lunge: 900, lungeDur: 0.6, steer: 5, bladeGap: 0.4,   // basic: homing leap
-    stabs: 3, first: 0.1, gap: 0.16, dmg: 4, hold: 0.18, kick: 420,
+    stabs: 3, first: 0.1, gap: 0.16, dmg: 8, hold: 0.18, kick: 420,
     ultPerStab: 10, ultPerHurt: 0.6,                 // ult meter gain (0..100)
     ignite: 0.55,                                    // ult: wings spread, hovering
     dash: 1350, dashDur: 0.9, dashSteer: 9,
-    uStabs: 5, uFirst: 0.08, uGap: 0.13, uDmg: 4,
+    uStabs: 5, uFirst: 0.08, uGap: 0.13, uDmg: 12,
     boomDelay: 0.16, boomDmg: 12, boomR: 120, boomKnock: 650
   }
 };

@@ -4,8 +4,8 @@ export const FIGHTERS = {
   yosai: {
     en: "YOSAISOY", th: "ໂຍສາຍຊອຍ", role: "นักฆ่ามีด", special: true,
     body: "#3a1410", edge: "#1a0806", ink: "#ff5a36",
-    mass: 1.05, cd: 3.9, skill: "เกาะแทง", dmg: "4 x 3",
-    ult: "ไฟอันติ", ultDmg: "4 x 5 + พลุ 12",
+    mass: 1.05, cd: 3.9, skill: "เกาะแทง", dmg: "8 x 3",
+    ult: "ไฟอันติ", ultDmg: "12 x 5 + พลุ 12",
     desc: "พุ่งเข้าไปเกาะศัตรูแล้วแทงมีดรัว 3 ครั้งก่อนปล่อย แทงโดนหรือโดนตีจะชาร์จไฟอันติ",
     ultDesc: "เปิดพลังเปลวไฟ กางปีกยมทูต พุ่งเข้าไปแทง 5 ครั้งแล้วระเบิดเป็นพลุไฟ",
     face: { idle: "img/fighters/yosai-idle.jpg", hurt: "img/fighters/yosai-hurt.jpg", ult: "img/fighters/yosai-ult.jpg" },
